@@ -1,19 +1,18 @@
-import pandas as pd
-from pyspark.sql.functions import pandas_udf
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
 
 
-@pandas_udf("string")
-def sentiment_udf(texts: pd.Series) -> pd.Series:
+def analyze_sentiment(text: str | None) -> str:
     from textblob import TextBlob
 
-    def analyze(text: str | None) -> str:
-        if not text:
-            return "neutral"
-        polarity = TextBlob(str(text)).sentiment.polarity
-        if polarity > 0.1:
-            return "positive"
-        if polarity < -0.1:
-            return "negative"
+    if not text:
         return "neutral"
+    polarity = TextBlob(str(text)).sentiment.polarity
+    if polarity > 0.1:
+        return "positive"
+    if polarity < -0.1:
+        return "negative"
+    return "neutral"
 
-    return texts.apply(analyze)
+
+sentiment_udf = udf(analyze_sentiment, StringType())

@@ -17,5 +17,4 @@ def build_trending_keywords_df(enriched_df: DataFrame) -> DataFrame:
             col("keyword"),
         )
         .agg(count("*").alias("frequency"))
-        .orderBy(col("frequency").desc())
     )

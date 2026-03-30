@@ -2,7 +2,12 @@ import argparse
 import csv
 import json
 import pathlib
+import sys
 import time
+
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from collectors.common import create_producer, now_iso8601, publish_events
 from config.kafka_config import RAW_POSTS_TOPIC
