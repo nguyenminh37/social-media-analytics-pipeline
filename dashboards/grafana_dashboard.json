@@ -1,0 +1,16 @@
+{
+  "title": "Social Media Analytics",
+  "uid": "social-media-analytics",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "title": "Sentiment Distribution",
+      "type": "piechart"
+    },
+    {
+      "title": "Trending Keywords",
+      "type": "table"
+    }
+  ]
+}

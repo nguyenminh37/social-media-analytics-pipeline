@@ -1,18 +1,30 @@
 # Social Media Analytics Pipeline
 
-## Kafka step 1
+Project này triển khai pipeline Kappa để thu thập dữ liệu Reddit + RSS, đưa vào Kafka, xử lý bằng Spark Structured Streaming, rồi ghi ra MinIO, MongoDB, Elasticsearch.
 
-Project này đã được scaffold sẵn để chạy Kafka và đẩy tin RSS từ VnExpress vào topic `news-stream`.
+## Cấu trúc chính
 
-### 1. Chạy Kafka bằng Docker
+- `collectors/reddit_collector.py`: lấy dữ liệu Reddit qua API `praw`
+- `collectors/rss_collector.py`: lấy tin từ RSS feed báo điện tử
+- `collectors/historical_replay_producer.py`: replay dữ liệu lịch sử vào Kafka
+- `spark_jobs/stream_processor.py`: clean, dedup, sentiment, trending, sink ra storage
+- `batch_tools/create_topics.py`: tạo Kafka topics
+
+## 1. Chạy hạ tầng MVP
 
 ```bash
 docker compose up -d
 ```
 
-Lưu ý: project này pin `cp-kafka` và `cp-zookeeper` về bản `7.5.11` để chạy theo mô hình ZooKeeper đơn giản. Dùng `latest` hiện có thể lỗi vì Confluent 8.x mặc định chuyển sang KRaft.
+Hệ thống sẽ chạy:
+- Kafka + ZooKeeper
+- MinIO
+- MongoDB
+- Elasticsearch
+- Kibana
+- Grafana
 
-### 2. Cài thư viện Python
+## 2. Cài thư viện Python
 
 ```bash
 python3 -m venv .venv
@@ -20,33 +32,91 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Chạy producer
+Tạo file cấu hình local từ mẫu rồi điền secret của bạn vào `.env`:
 
 ```bash
-python3 producer.py
+cp .env.example .env
 ```
 
-Kỳ vọng:
+Nếu bạn dùng MongoDB Atlas, sửa `MONGO_URI` trong `.env`, ví dụ:
 
-```text
-Sent: ...
-Sent: ...
+```bash
+MONGO_URI=mongodb+srv://username:password@your-cluster.mongodb.net/analytics?appName=analytics
 ```
 
-### 4. Test consumer
+## 3. Tạo Kafka topics
+
+```bash
+python3 batch_tools/create_topics.py
+```
+
+## 4. Chạy collectors
+
+### Reddit API collector
+
+```bash
+export REDDIT_CLIENT_ID=...
+export REDDIT_CLIENT_SECRET=...
+export REDDIT_USER_AGENT=...
+python3 collectors/reddit_collector.py
+```
+
+### RSS collector
+
+```bash
+python3 collectors/rss_collector.py
+```
+
+## 5. Replay historical data
+
+```bash
+python3 collectors/historical_replay_producer.py sample_data/posts.json --sleep-seconds 0.5
+```
+
+## 6. Chạy Spark Structured Streaming
+
+```bash
+.venv/bin/spark-submit \
+  spark_jobs/stream_processor.py
+```
+
+Job này:
+- đọc từ `raw_posts`
+- clean + dedup
+- gán sentiment
+- tính sentiment metrics và trending keywords
+- ghi sang `processed_posts`, `aggregated_metrics`
+- lưu xuống MinIO, MongoDB, Elasticsearch
+
+## 7. Kiểm tra topics
 
 ```bash
 docker exec -it sma-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
-  --topic news-stream \
+  --topic raw_posts \
   --from-beginning
 ```
 
-Nếu thấy JSON article thì Kafka đang nhận data đúng.
+```bash
+docker exec -it sma-kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic processed_posts \
+  --from-beginning
+```
 
-## Biến môi trường hỗ trợ
+```bash
+docker exec -it sma-kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic aggregated_metrics \
+  --from-beginning
+```
 
-- `KAFKA_BOOTSTRAP_SERVERS` mặc định `localhost:9092`
-- `KAFKA_TOPIC` mặc định `news-stream`
-- `RSS_URL` mặc định `https://vnexpress.net/rss/tin-moi-nhat.rss`
-- `FETCH_INTERVAL_SECONDS` mặc định `10`
+## Biến môi trường chính
+
+- `REDDIT_SUBREDDITS`: danh sách subreddit, mặc định `worldnews,technology,vietnam`
+- `REDDIT_FETCH_INTERVAL_SECONDS`: mặc định `30`
+- `RSS_FETCH_INTERVAL_SECONDS`: mặc định `60`
+- `KAFKA_BOOTSTRAP_SERVERS`: mặc định `localhost:9092`
+- `MINIO_ENDPOINT`: mặc định `http://localhost:9000`
+- `MONGO_URI`: mặc định `mongodb://localhost:27017`, nên override bằng `.env` nếu dùng MongoDB Atlas
+- `ELASTICSEARCH_HOST`: mặc định `http://localhost:9200`

@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: social-media-spark
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: social-media-spark
+  template:
+    metadata:
+      labels:
+        app: social-media-spark
+    spec:
+      containers:
+        - name: spark
+          image: bitnami/spark:3.5

@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: social-media-kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: social-media-kafka
+  template:
+    metadata:
+      labels:
+        app: social-media-kafka
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.5.11
