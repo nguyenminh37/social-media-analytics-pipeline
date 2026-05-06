@@ -25,9 +25,9 @@ class MongoDBTests(unittest.TestCase):
         
         init_mongodb(mock_client, "test_db")
         
-        self.assertEqual(mock_posts.create_index.call_count, 3)
-        self.assertEqual(mock_sentiment.create_index.call_count, 1)
-        self.assertEqual(mock_trending.create_index.call_count, 1)
+        self.assertEqual(mock_posts.create_index.call_count, 4)
+        self.assertEqual(mock_sentiment.create_index.call_count, 2)
+        self.assertEqual(mock_trending.create_index.call_count, 3)
 
 if __name__ == "__main__":
     unittest.main()
