@@ -7,6 +7,7 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 RAW_POSTS_TOPIC = os.getenv("KAFKA_RAW_TOPIC", "raw_posts")
 PROCESSED_POSTS_TOPIC = os.getenv("KAFKA_PROCESSED_TOPIC", "processed_posts")
 AGGREGATED_METRICS_TOPIC = os.getenv("KAFKA_AGGREGATED_TOPIC", "aggregated_metrics")
+PIPELINE_DLQ_TOPIC = os.getenv("KAFKA_PIPELINE_DLQ_TOPIC", "pipeline_dlq")
 
 RAW_YOUTUBE_VIDEOS_TOPIC = os.getenv(
     "KAFKA_RAW_YOUTUBE_VIDEOS_TOPIC", "raw_youtube_videos"
@@ -26,6 +27,7 @@ SILVER_YOUTUBE_CHANNEL_SNAPSHOTS_TOPIC = os.getenv(
 YOUTUBE_AGGREGATED_METRICS_TOPIC = os.getenv(
     "KAFKA_YOUTUBE_AGGREGATED_METRICS_TOPIC", "youtube_aggregated_metrics"
 )
+RAW_ARCHIVER_GROUP_ID = os.getenv("KAFKA_RAW_ARCHIVER_GROUP_ID", "raw-archiver")
 
 TOPIC_SPECS = [
     {
@@ -45,6 +47,12 @@ TOPIC_SPECS = [
         "partitions": 1,
         "replication_factor": 1,
         "config": {"retention.ms": str(24 * 60 * 60 * 1000)},
+    },
+    {
+        "name": PIPELINE_DLQ_TOPIC,
+        "partitions": 3,
+        "replication_factor": 1,
+        "config": {"retention.ms": str(14 * 24 * 60 * 60 * 1000)},
     },
     {
         "name": RAW_YOUTUBE_VIDEOS_TOPIC,
@@ -82,4 +90,11 @@ TOPIC_SPECS = [
         "replication_factor": 1,
         "config": {"retention.ms": str(24 * 60 * 60 * 1000)},
     },
+]
+
+RAW_ARCHIVER_TOPICS = [
+    RAW_POSTS_TOPIC,
+    RAW_YOUTUBE_VIDEOS_TOPIC,
+    RAW_YOUTUBE_COMMENTS_TOPIC,
+    RAW_YOUTUBE_CHANNELS_TOPIC,
 ]

@@ -1,7 +1,6 @@
 import os
 from datetime import datetime, timezone
-
-from pyspark.sql import DataFrame, SparkSession
+from typing import Any
 
 from config.minio_config import (
     CHECKPOINTS_BUCKET,
@@ -49,7 +48,9 @@ def normalize_mongo_records(
     return normalized_records
 
 
-def create_spark_session(app_name: str) -> SparkSession:
+def create_spark_session(app_name: str):
+    from pyspark.sql import SparkSession
+
     return (
         SparkSession.builder.appName(app_name)
         .config("spark.streaming.stopGracefullyOnShutdown", "true")
@@ -68,7 +69,7 @@ def create_spark_session(app_name: str) -> SparkSession:
 
 
 def reset_checkpoint_if_requested(
-    spark: SparkSession,
+    spark,
     checkpoint_base: str,
     enabled: bool,
 ) -> None:
@@ -91,7 +92,32 @@ def default_checkpoint_base(job_name: str) -> str:
     return f"s3a://{CHECKPOINTS_BUCKET}/{job_name}"
 
 
-def write_dataframe_to_parquet(batch_df: DataFrame, target_path: str) -> None:
+def write_dataframe_to_parquet(batch_df, target_path: str) -> None:
     if batch_df.rdd.isEmpty():
         return
     batch_df.write.mode("append").format("parquet").save(target_path)
+
+
+def build_kafka_source_options(topic: str) -> dict[str, Any]:
+    options: dict[str, Any] = {
+        "kafka.bootstrap.servers": os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+        "subscribe": topic,
+        "failOnDataLoss": os.getenv("KAFKA_FAIL_ON_DATA_LOSS", "false"),
+    }
+    starting_timestamp = os.getenv("KAFKA_STREAM_STARTING_TIMESTAMP")
+    if starting_timestamp:
+        options["startingTimestamp"] = starting_timestamp
+        options["startingOffsetsByTimestampStrategy"] = os.getenv(
+            "KAFKA_STREAM_STARTING_OFFSETS_BY_TIMESTAMP_STRATEGY", "error"
+        )
+        return options
+
+    options["startingOffsets"] = os.getenv("KAFKA_STREAM_STARTING_OFFSETS", "earliest")
+    return options
+
+
+def read_kafka_stream(spark, topic: str):
+    reader = spark.readStream.format("kafka")
+    for key, value in build_kafka_source_options(topic).items():
+        reader = reader.option(key, value)
+    return reader.load()

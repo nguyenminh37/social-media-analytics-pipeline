@@ -16,7 +16,6 @@ from pyspark.sql.functions import (
     count,
     current_timestamp,
     explode,
-    from_json,
     length,
     lit,
     lower,
@@ -32,6 +31,7 @@ from pyspark.sql.functions import (
 from config.elasticsearch_config import ELASTICSEARCH_HOST
 from config.kafka_config import (
     KAFKA_BOOTSTRAP_SERVERS,
+    PIPELINE_DLQ_TOPIC,
     RAW_YOUTUBE_CHANNELS_TOPIC,
     RAW_YOUTUBE_COMMENTS_TOPIC,
     RAW_YOUTUBE_VIDEOS_TOPIC,
@@ -58,10 +58,12 @@ from schemas.youtube.raw_schema import (
     RAW_YOUTUBE_VIDEO_SPARK_SCHEMA,
 )
 from spark_jobs.sentiment_udf import sentiment_udf
+from spark_jobs.shared.quality import build_dlq_sink_df, split_valid_and_dlq_rows
 from spark_jobs.shared.runtime import (
     create_spark_session,
     default_checkpoint_base,
     normalize_mongo_records,
+    read_kafka_stream,
     reset_checkpoint_if_requested,
     write_dataframe_to_parquet,
 )
@@ -76,19 +78,6 @@ ENABLE_ES_SINK = os.getenv("ENABLE_ES_SINK", "true").lower() == "true"
 RESET_CHECKPOINT_ON_START = (
     os.getenv("RESET_CHECKPOINT_ON_START", "false").lower() == "true"
 )
-
-
-def read_kafka_json_stream(spark, topic: str, schema) -> DataFrame:
-    raw_df = (
-        spark.readStream.format("kafka")
-        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
-        .option("subscribe", topic)
-        .option("startingOffsets", "latest")
-        .load()
-    )
-    return raw_df.select(
-        from_json(col("value").cast("string"), schema).alias("data")
-    ).select("data.*")
 
 
 def build_video_content_events(videos_df: DataFrame) -> DataFrame:
@@ -267,9 +256,14 @@ def write_content_to_mongo(batch_df: DataFrame, batch_id: int) -> None:
     records = normalize_mongo_records(records, ("published_at", "ingested_at", "event_time"))
     client = MongoClient(MONGO_URI)
     try:
-        client[MONGO_DATABASE][YOUTUBE_CONTENT_EVENTS_COLLECTION].insert_many(
-            records, ordered=False
-        )
+        operations = [
+            UpdateOne({"entity_id": record["entity_id"]}, {"$set": record}, upsert=True)
+            for record in records
+        ]
+        if operations:
+            client[MONGO_DATABASE][YOUTUBE_CONTENT_EVENTS_COLLECTION].bulk_write(
+                operations, ordered=False
+            )
     finally:
         client.close()
 
@@ -306,7 +300,35 @@ def write_metrics_to_mongo(batch_df: DataFrame, batch_id: int, collection: str) 
     records = normalize_mongo_records(records, ("window_start", "window_end"))
     client = MongoClient(MONGO_URI)
     try:
-        client[MONGO_DATABASE][collection].insert_many(records, ordered=False)
+        if collection == YOUTUBE_SENTIMENT_COLLECTION:
+            operations = [
+                UpdateOne(
+                    {
+                        "window_start": record["window_start"],
+                        "window_end": record["window_end"],
+                        "entity_type": record["entity_type"],
+                        "sentiment": record["sentiment"],
+                    },
+                    {"$set": record},
+                    upsert=True,
+                )
+                for record in records
+            ]
+        else:
+            operations = [
+                UpdateOne(
+                    {
+                        "window_start": record["window_start"],
+                        "window_end": record["window_end"],
+                        "keyword": record["keyword"],
+                    },
+                    {"$set": record},
+                    upsert=True,
+                )
+                for record in records
+            ]
+        if operations:
+            client[MONGO_DATABASE][collection].bulk_write(operations, ordered=False)
     finally:
         client.close()
 
@@ -349,14 +371,26 @@ def main() -> None:
     spark.sparkContext.setLogLevel("WARN")
     reset_checkpoint_if_requested(spark, CHECKPOINT_BASE, RESET_CHECKPOINT_ON_START)
 
-    videos_df = read_kafka_json_stream(
-        spark, RAW_YOUTUBE_VIDEOS_TOPIC, RAW_YOUTUBE_VIDEO_SPARK_SCHEMA
+    videos_df, videos_dlq_df = split_valid_and_dlq_rows(
+        read_kafka_stream(spark, RAW_YOUTUBE_VIDEOS_TOPIC),
+        RAW_YOUTUBE_VIDEO_SPARK_SCHEMA,
+        required_fields=["video_id", "title", "channel_id"],
+        source_pipeline="youtube_videos",
     )
-    comments_df = read_kafka_json_stream(
-        spark, RAW_YOUTUBE_COMMENTS_TOPIC, RAW_YOUTUBE_COMMENT_SPARK_SCHEMA
+    comments_df, comments_dlq_df = split_valid_and_dlq_rows(
+        read_kafka_stream(spark, RAW_YOUTUBE_COMMENTS_TOPIC),
+        RAW_YOUTUBE_COMMENT_SPARK_SCHEMA,
+        required_fields=["comment_id", "video_id", "text"],
+        source_pipeline="youtube_comments",
     )
-    channels_df = read_kafka_json_stream(
-        spark, RAW_YOUTUBE_CHANNELS_TOPIC, RAW_YOUTUBE_CHANNEL_SPARK_SCHEMA
+    channels_df, channels_dlq_df = split_valid_and_dlq_rows(
+        read_kafka_stream(spark, RAW_YOUTUBE_CHANNELS_TOPIC),
+        RAW_YOUTUBE_CHANNEL_SPARK_SCHEMA,
+        required_fields=["channel_id", "channel_name"],
+        source_pipeline="youtube_channels",
+    )
+    youtube_dlq_df = (
+        videos_dlq_df.unionByName(comments_dlq_df).unionByName(channels_dlq_df)
     )
 
     content_df = build_video_content_events(videos_df).unionByName(
@@ -389,6 +423,13 @@ def main() -> None:
         )
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/youtube_metrics_kafka")
         .outputMode("update")
+        .start(),
+        build_dlq_sink_df(youtube_dlq_df)
+        .writeStream.format("kafka")
+        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
+        .option("topic", PIPELINE_DLQ_TOPIC)
+        .option("checkpointLocation", f"{CHECKPOINT_BASE}/youtube_dlq")
+        .outputMode("append")
         .start(),
     ]
 

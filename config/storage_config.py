@@ -3,6 +3,8 @@ import os
 from config.env import PROJECT_ROOT  # noqa: F401
 
 
+RAW_ARCHIVE_PREFIX = os.getenv("MINIO_RAW_ARCHIVE_PREFIX", "kafka_raw")
+
 YOUTUBE_CONTENT_EVENTS_COLLECTION = os.getenv(
     "MONGO_YOUTUBE_CONTENT_EVENTS_COLLECTION", "youtube_content_events"
 )

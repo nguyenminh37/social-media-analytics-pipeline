@@ -55,6 +55,14 @@ def init_mongodb(client: MongoClient, db_name: str):
     sentiment = db[SENTIMENT_COLLECTION]
     sentiment.create_index([("window_start", pymongo.DESCENDING)])
     sentiment.create_index(
+        [
+            ("window_start", pymongo.ASCENDING),
+            ("window_end", pymongo.ASCENDING),
+            ("sentiment", pymongo.ASCENDING),
+        ],
+        unique=True,
+    )
+    sentiment.create_index(
         [("window_end", pymongo.ASCENDING)],
         expireAfterSeconds=metrics_ttl_seconds,
     )
@@ -107,6 +115,15 @@ def init_mongodb(client: MongoClient, db_name: str):
     # 6. YouTube Metric Indexes
     youtube_sentiment = db[YOUTUBE_SENTIMENT_COLLECTION]
     youtube_sentiment.create_index([("window_start", pymongo.DESCENDING)])
+    youtube_sentiment.create_index(
+        [
+            ("window_start", pymongo.ASCENDING),
+            ("window_end", pymongo.ASCENDING),
+            ("entity_type", pymongo.ASCENDING),
+            ("sentiment", pymongo.ASCENDING),
+        ],
+        unique=True,
+    )
     youtube_sentiment.create_index(
         [("window_end", pymongo.ASCENDING)],
         expireAfterSeconds=metrics_ttl_seconds,
