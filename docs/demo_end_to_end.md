@@ -4,7 +4,7 @@
 
 Demo ngắn gọn luồng hoàn chỉnh của dự án:
 
-`RSS/Reddit -> Kafka -> Spark -> MongoDB / MinIO / Elasticsearch -> Kibana / Grafana`
+`RSS + YouTube -> Kafka -> Spark -> MongoDB / MinIO / Elasticsearch -> Kibana / Grafana`
 
 ---
 
@@ -13,20 +13,23 @@ Demo ngắn gọn luồng hoàn chỉnh của dự án:
 ```mermaid
 flowchart LR
     A[RSS Feeds<br/>VnExpress / Tuoi Tre / BBC]
-    B[Reddit API]
     C[Historical Replay]
+    Y[YouTube Data API]
 
     A --> D[Kafka<br/>raw_posts]
-    B --> D
     C --> D
+    Y --> YR[Kafka<br/>raw_youtube_*]
 
     D --> E[Spark Structured Streaming<br/>stream_processor.py]
+    YR --> YS[Spark Structured Streaming<br/>youtube/stream_processor.py]
 
     E --> F[Kafka<br/>processed_posts]
     E --> G[Kafka<br/>aggregated_metrics]
     E --> H[MongoDB<br/>hot storage]
     E --> I[MinIO<br/>parquet + checkpoint]
     E --> J[Elasticsearch<br/>search index]
+    YS --> YC[Kafka<br/>silver_youtube_* / youtube_aggregated_metrics]
+    YS --> YM[MongoDB / MinIO / Elasticsearch<br/>youtube_*]
 
     J --> K[Kibana]
     J --> L[Grafana]
@@ -38,7 +41,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A[Collector chạy định kỳ] --> B[Đọc RSS / Reddit]
+    A[Collector chạy định kỳ] --> B[Đọc RSS]
     B --> C[Publish vào Kafka raw_posts]
     C --> D[Spark đọc stream]
     D --> E[Clean + trim + chuẩn hóa schema]
@@ -50,6 +53,11 @@ flowchart TD
     H --> K[MongoDB posts / sentiment_metrics / trending_topics]
     H --> L[MinIO clean-posts / aggregates / checkpoints]
     H --> M[Elasticsearch posts]
+
+    Y[YouTube producer] --> Y1[raw_youtube_videos / comments / channels]
+    Y1 --> Y2[YouTube Spark job]
+    Y2 --> Y3[silver_youtube_content_events]
+    Y2 --> Y4[youtube_content_events / youtube_channel_snapshots]
 ```
 
 ---
@@ -75,27 +83,46 @@ Kỳ vọng:
 
 ## 4. Chạy demo
 
-### Terminal 1: Spark
+### Terminal 1: Spark legacy RSS
 
 ```bash
 cd /Volumes/plxg2/Project/bigdata/social-media-analytics-pipeline
 source .venv/bin/activate
 RESET_CHECKPOINT_ON_START=true spark-submit \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,org.elasticsearch:elasticsearch-spark-30_2.12:8.10.0,org.apache.hadoop:hadoop-aws:3.3.4 \
-  spark_jobs/stream_processor.py
+  spark_jobs/legacy_posts/stream_processor.py
 ```
 
 ### Terminal 2: RSS collector
 
 ```bash
 cd /Volumes/plxg2/Project/bigdata/social-media-analytics-pipeline
-.venv/bin/python collectors/rss_collector.py
+.venv/bin/python -m collectors.rss.collector
 ```
 
 Đợi log:
 - `Feed VnExpress: Fetched ...`
 - `Feed Tuoi Tre: Fetched ...`
 - `Feed BBC Vietnamese: Fetched ...`
+
+### Terminal 3: YouTube Spark
+
+```bash
+cd /Volumes/plxg2/Project/bigdata/social-media-analytics-pipeline
+source .venv/bin/activate
+RESET_CHECKPOINT_ON_START=true spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,org.elasticsearch:elasticsearch-spark-30_2.12:8.10.0,org.apache.hadoop:hadoop-aws:3.3.4 \
+  spark_jobs/youtube/stream_processor.py
+```
+
+### Terminal 4: YouTube producer
+
+```bash
+cd /Volumes/plxg2/Project/bigdata/social-media-analytics-pipeline
+YOUTUBE_MAX_TRENDING_VIDEOS=2 \
+YOUTUBE_MAX_COMMENTS_PER_VIDEO=5 \
+.venv/bin/python -m collectors.youtube.producer
+```
 
 ---
 
@@ -116,6 +143,9 @@ Cho xem:
 - `raw_posts`: dữ liệu thô vừa crawl
 - `processed_posts`: dữ liệu đã qua Spark, có `sentiment`
 - `aggregated_metrics`: dữ liệu tổng hợp
+- `raw_youtube_videos`, `raw_youtube_comments`, `raw_youtube_channels`: dữ liệu YouTube thô
+- `silver_youtube_content_events`, `silver_youtube_channel_snapshots`: dữ liệu YouTube đã chuẩn hóa
+- `youtube_aggregated_metrics`: metric tổng hợp YouTube
 
 ### 6.2 MinIO
 
@@ -132,6 +162,7 @@ Cho xem các bucket:
 
 Vào `Discover`:
 - Data view: `posts`
+- Data view YouTube: `youtube_content_events`
 - Timestamp field: `published_at`
 
 Cho xem:
@@ -153,7 +184,7 @@ Cho xem dashboard:
 
 ## 7. Cách nói ngắn gọn
 
-> Hệ thống thu thập dữ liệu RSS/Reddit theo thời gian thực, đẩy vào Kafka. Spark Structured Streaming đọc dữ liệu từ `raw_posts`, làm sạch, dedup, phân tích sentiment và tạo metric tổng hợp. Kết quả được ghi ra Kafka đầu ra, MongoDB, MinIO và Elasticsearch; sau đó quan sát qua Kafka UI, Kibana và Grafana.
+> Hệ thống có pipeline RSS trên `raw_posts` và pipeline YouTube riêng trên `raw_youtube_*`. Dữ liệu sau Spark được chuẩn hóa, ghi ra Kafka, MongoDB, MinIO và Elasticsearch để quan sát qua Kafka UI, Kibana và Grafana.
 
 ---
 
@@ -162,5 +193,8 @@ Cho xem dashboard:
 - `raw_posts` có dữ liệu mới
 - `processed_posts` có dữ liệu đã xử lý
 - MinIO hoặc Kibana có dữ liệu đầu ra
+- `raw_youtube_*` có dữ liệu mới
+- `silver_youtube_content_events` có dữ liệu đã xử lý
+- `youtube_content_events` hoặc MinIO path YouTube có dữ liệu đầu ra
 
 Nếu đủ 3 điểm này thì demo end-to-end đã pass.

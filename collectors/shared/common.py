@@ -78,6 +78,7 @@ def create_producer() -> KafkaProducer:
         value_serializer=lambda value: json.dumps(value, ensure_ascii=False).encode(
             "utf-8"
         ),
+        key_serializer=lambda value: value.encode("utf-8") if value else None,
     )
 
 
@@ -88,5 +89,18 @@ def publish_events(
 ) -> int:
     for event in events:
         producer.send(topic, event).get(timeout=10)
+    producer.flush()
+    return len(events)
+
+
+def publish_keyed_events(
+    producer: KafkaProducer,
+    events: list[dict],
+    topic: str,
+    key_field: str,
+) -> int:
+    for event in events:
+        key = event.get(key_field)
+        producer.send(topic, key=str(key) if key else None, value=event).get(timeout=10)
     producer.flush()
     return len(events)

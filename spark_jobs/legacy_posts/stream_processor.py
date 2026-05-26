@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -49,7 +49,7 @@ from config.mongo_config import (
     SENTIMENT_COLLECTION,
     TRENDING_COLLECTION,
 )
-from schemas.post_schema import POST_SPARK_SCHEMA
+from schemas.legacy_posts.post_schema import POST_SPARK_SCHEMA
 from spark_jobs.sentiment_udf import sentiment_udf
 from spark_jobs.trending_analyzer import build_trending_keywords_df
 

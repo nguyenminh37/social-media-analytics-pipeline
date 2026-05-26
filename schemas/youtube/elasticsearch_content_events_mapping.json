@@ -1,0 +1,41 @@
+{
+  "mappings": {
+    "properties": {
+      "entity_id": { "type": "keyword" },
+      "platform": { "type": "keyword" },
+      "entity_type": { "type": "keyword" },
+      "parent_entity_id": { "type": "keyword" },
+      "title": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "body_text": { "type": "text" },
+      "author_id": { "type": "keyword" },
+      "author_name": { "type": "keyword" },
+      "source_url": { "type": "keyword" },
+      "category": { "type": "keyword" },
+      "tags": { "type": "keyword" },
+      "published_at": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "ingested_at": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "event_time": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "engagement_view_count": { "type": "long" },
+      "engagement_like_count": { "type": "long" },
+      "engagement_comment_count": { "type": "long" },
+      "sentiment": { "type": "keyword" }
+    }
+  }
+}

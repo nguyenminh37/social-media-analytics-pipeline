@@ -1,6 +1,6 @@
 # Social Media Analytics - Architecture
 
-This document describes the Kappa architecture implemented in this project for real-time social media analytics.
+This document describes the Kappa architecture implemented in this project for real-time social media analytics. The repo now keeps the RSS pipeline separate from the YouTube pipeline.
 
 ## Kappa Architecture Overview
 Unlike Lambda architecture which maintains both a batch and a streaming layer, the **Kappa architecture** treats everything as a stream. Data is ingested as streams, processed in real-time, and served to the user. If historical data needs to be reprocessed, it is simply replayed through the same stream processing engine.
@@ -10,10 +10,11 @@ Unlike Lambda architecture which maintains both a batch and a streaming layer, t
 ```mermaid
 graph TD
     A1[RSS Feeds] -->|Polling| C(Kafka: raw_posts)
-    A2[Reddit API] -->|Polling| C
-    A3[Historical Data] -->|Replay Script| C
+    A2[Historical Data] -->|Replay Script| C
+    A3[YouTube Data API] -->|Producer| Y1(Kafka: raw_youtube_*)
     
     C -->|Consume| D[Spark Structured Streaming]
+    Y1 -->|Consume| Y2[YouTube Spark Streaming]
     
     subgraph Stream Processing [Stream Processor]
     D --> E[Text Cleaning & Dedup]
@@ -22,10 +23,12 @@ graph TD
     end
     
     G -->|Publish| H(Kafka: processed_posts)
+    Y2 -->|Publish| Y3(Kafka: silver_youtube_* / youtube_aggregated_metrics)
     
     H -->|Sink| I[(MongoDB)]
     H -->|Sink| J[(Elasticsearch)]
     H -->|Sink| K[(MinIO Parquet)]
+    Y3 -->|Sink| Y4[(YouTube MongoDB / Elasticsearch / MinIO)]
     
     J --> L[Kibana Dashboards]
     J --> M[Grafana Dashboards]
@@ -35,7 +38,6 @@ graph TD
 
 ### 1. Ingestion Layer (Collectors)
 - **RSS Collector**: Periodically fetches news from predefined RSS feeds (e.g., VnExpress, Tuoi Tre). Implements exponential backoff on failure.
-- **Reddit Collector**: Fetches recent submissions from specific subreddits using the `praw` API.
 - **Message Broker**: **Apache Kafka** serves as the central nervous system. It buffers incoming `raw_posts` and decouples ingestion from processing.
 
 ### 2. Stream Processing Layer

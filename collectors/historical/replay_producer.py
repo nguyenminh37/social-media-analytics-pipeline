@@ -5,13 +5,13 @@ import pathlib
 import sys
 import time
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from collectors.common import create_producer, now_iso8601, publish_events
+from collectors.shared.common import create_producer, now_iso8601, publish_events
 from config.kafka_config import RAW_POSTS_TOPIC
-from schemas.post_schema import POST_FIELDS
+from schemas.legacy_posts.post_schema import POST_FIELDS
 
 
 def normalize_event(record: dict) -> dict:

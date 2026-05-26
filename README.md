@@ -1,6 +1,6 @@
 # Social Media Analytics Pipeline
 
-Project này triển khai pipeline Kappa để thu thập dữ liệu Reddit + RSS, đưa vào Kafka, xử lý bằng Spark Structured Streaming, rồi ghi ra MinIO, MongoDB, Elasticsearch.
+Project này triển khai pipeline Kappa để thu thập dữ liệu RSS và YouTube, đưa vào Kafka, xử lý bằng Spark Structured Streaming, rồi ghi ra MinIO, MongoDB, Elasticsearch.
 
 Trong kiến trúc hiện tại:
 - `MinIO` là lớp lưu trữ dài hạn cho parquet/checkpoint
@@ -9,10 +9,12 @@ Trong kiến trúc hiện tại:
 
 ## Cấu trúc chính
 
-- `collectors/reddit_collector.py`: lấy dữ liệu Reddit qua API `praw`
-- `collectors/rss_collector.py`: lấy tin từ RSS feed báo điện tử
-- `collectors/historical_replay_producer.py`: replay dữ liệu lịch sử vào Kafka
-- `spark_jobs/stream_processor.py`: clean, dedup, sentiment, trending, sink ra storage
+- `collectors/rss/collector.py`: lấy tin từ RSS feed báo điện tử
+- `collectors/historical/replay_producer.py`: replay dữ liệu lịch sử vào Kafka
+- `collectors/youtube/collector.py`: crawl YouTube entities ra raw schema
+- `collectors/youtube/producer.py`: lấy YouTube video/channel/comment và đẩy vào raw topics riêng
+- `spark_jobs/legacy_posts/stream_processor.py`: xử lý RSS posts trên luồng `raw_posts`
+- `spark_jobs/youtube/stream_processor.py`: xử lý YouTube Bronze -> Silver/Gold
 - `batch_tools/create_topics.py`: tạo Kafka topics
 
 ## 1. Chạy hạ tầng MVP
@@ -57,32 +59,33 @@ python3 batch_tools/create_topics.py
 
 ## 4. Chạy collectors
 
-### Reddit API collector
-
-```bash
-export REDDIT_CLIENT_ID=...
-export REDDIT_CLIENT_SECRET=...
-export REDDIT_USER_AGENT=...
-python3 collectors/reddit_collector.py
-```
-
 ### RSS collector
 
 ```bash
-python3 collectors/rss_collector.py
+python3 -m collectors.rss.collector
+```
+
+### YouTube producer
+
+Điền `YOUTUBE_API_KEY` trong `.env`, rồi chạy giới hạn nhỏ khi demo/test:
+
+```bash
+YOUTUBE_MAX_TRENDING_VIDEOS=2 \
+YOUTUBE_MAX_COMMENTS_PER_VIDEO=5 \
+python3 -m collectors.youtube.producer
 ```
 
 ## 5. Replay historical data
 
 ```bash
-python3 collectors/historical_replay_producer.py sample_data/posts.json --sleep-seconds 0.5
+python3 -m collectors.historical.replay_producer sample_data/posts.json --sleep-seconds 0.5
 ```
 
 ## 6. Chạy Spark Structured Streaming
 
 ```bash
 .venv/bin/spark-submit \
-  spark_jobs/stream_processor.py
+  spark_jobs/legacy_posts/stream_processor.py
 ```
 
 Job này:
@@ -97,7 +100,14 @@ Nếu demo/dev cần reset state cũ của Spark tự động để tránh lỗi
 
 ```bash
 RESET_CHECKPOINT_ON_START=true .venv/bin/spark-submit \
-  spark_jobs/stream_processor.py
+  spark_jobs/legacy_posts/stream_processor.py
+```
+
+### YouTube Spark job
+
+```bash
+RESET_CHECKPOINT_ON_START=true .venv/bin/spark-submit \
+  spark_jobs/youtube/stream_processor.py
 ```
 
 ## 7. Kiểm tra topics
@@ -123,11 +133,27 @@ docker exec -it sma-kafka kafka-console-consumer \
   --from-beginning
 ```
 
+```bash
+docker exec -it sma-kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic raw_youtube_videos \
+  --from-beginning
+```
+
+```bash
+docker exec -it sma-kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic silver_youtube_content_events \
+  --from-beginning
+```
+
 ## Biến môi trường chính
 
-- `REDDIT_SUBREDDITS`: danh sách subreddit, mặc định `worldnews,technology,vietnam`
-- `REDDIT_FETCH_INTERVAL_SECONDS`: mặc định `30`
 - `RSS_FETCH_INTERVAL_SECONDS`: mặc định `60`
+- `YOUTUBE_API_KEY`: API key cho YouTube Data API v3
+- `YOUTUBE_REGION_CODE`: mặc định `VN`
+- `YOUTUBE_MAX_TRENDING_VIDEOS`: mặc định `50`
+- `YOUTUBE_MAX_COMMENTS_PER_VIDEO`: mặc định `100`
 - `KAFKA_BOOTSTRAP_SERVERS`: mặc định `localhost:9092`
 - `MINIO_ENDPOINT`: mặc định `http://localhost:9000`
 - `MONGO_URI`: mặc định `mongodb://localhost:27017`

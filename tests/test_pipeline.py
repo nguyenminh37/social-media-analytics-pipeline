@@ -3,8 +3,8 @@ import unittest
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from collectors.historical_replay_producer import load_records, normalize_event
-from schemas.post_schema import POST_FIELDS
+from collectors.historical.replay_producer import load_records, normalize_event
+from schemas.legacy_posts.post_schema import POST_FIELDS
 
 class PipelineTests(unittest.TestCase):
     def test_normalize_event_defaults(self) -> None:
