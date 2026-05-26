@@ -139,7 +139,7 @@ export function normalizeTopVideosResponse(value: unknown): TopVideosResponse {
     items: asArray(record.items).map((item) => {
       const video = asObject(item);
       return {
-        entity_id: asString(video.entity_id) ?? "unknown-video",
+        entity_id: asString(video.entity_id) ?? "video-khong-xac-dinh",
         title: asString(video.title),
         source_url: asString(video.source_url),
         sentiment: asString(video.sentiment),
@@ -201,7 +201,7 @@ function extractErrorMessage(payload: unknown, fallbackStatus: number) {
   return (
     asString(record.detail) ??
     asString(record.error) ??
-    `Request failed with status ${fallbackStatus}.`
+    `Yêu cầu thất bại với mã trạng thái ${fallbackStatus}.`
   );
 }
 
@@ -239,7 +239,7 @@ async function requestProxy<T>(
       error:
         error instanceof Error
           ? error.message
-          : "The dashboard could not reach the local proxy.",
+          : "Dashboard không thể kết nối tới proxy cục bộ.",
     };
   }
 }

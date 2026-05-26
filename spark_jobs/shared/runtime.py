@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -9,6 +10,7 @@ from config.minio_config import (
     MINIO_SECRET_KEY,
 )
 
+log = logging.getLogger(__name__)
 
 SPARK_KAFKA_PACKAGE = os.getenv(
     "SPARK_KAFKA_PACKAGE",
@@ -79,7 +81,18 @@ def reset_checkpoint_if_requested(
     jvm = spark._jvm
     hadoop_conf = spark._jsc.hadoopConfiguration()
     checkpoint_path = jvm.org.apache.hadoop.fs.Path(checkpoint_base)
-    filesystem = checkpoint_path.getFileSystem(hadoop_conf)
+    try:
+        filesystem = checkpoint_path.getFileSystem(hadoop_conf)
+    except Exception as exc:
+        if checkpoint_base.startswith("s3a://"):
+            log.warning(
+                "Skipping checkpoint reset for %s because S3A filesystem is unavailable. "
+                "For local runs, either pass --packages with hadoop-aws or set a local checkpoint path such as /tmp/youtube_stream_processor. Original error: %s",
+                checkpoint_base,
+                exc,
+            )
+            return
+        raise
 
     if filesystem.exists(checkpoint_path):
         filesystem.delete(checkpoint_path, True)

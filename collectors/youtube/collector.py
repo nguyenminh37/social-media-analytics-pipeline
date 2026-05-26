@@ -2,6 +2,7 @@ import os
 import csv
 import time
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -18,10 +19,14 @@ from config.youtube_config import (
     YOUTUBE_MAX_SEARCH_VIDEOS,
     YOUTUBE_MAX_TRENDING_VIDEOS,
     YOUTUBE_OUTPUT_DIR,
+    YOUTUBE_PRIORITY_KEYWORDS,
     YOUTUBE_REGION_CODE,
     YOUTUBE_REGION_CODES,
+    YOUTUBE_RELEVANCE_LANGUAGE,
     YOUTUBE_SEARCH_PUBLISHED_WITHIN_HOURS,
     YOUTUBE_SEARCH_QUERIES,
+    YOUTUBE_STRICT_VIETNAMESE_ONLY,
+    YOUTUBE_MIN_VIETNAMESE_SCORE,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +37,10 @@ REGION_CODE = YOUTUBE_REGION_CODE
 MAX_TRENDING_VIDEOS = YOUTUBE_MAX_TRENDING_VIDEOS
 MAX_COMMENTS_PER_VIDEO = YOUTUBE_MAX_COMMENTS_PER_VIDEO
 OUTPUT_DIR = YOUTUBE_OUTPUT_DIR
+VIETNAMESE_DIACRITICS_PATTERN = re.compile(
+    r"[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]",
+    re.IGNORECASE,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +51,68 @@ logging.basicConfig(
     ]
 )
 log = logging.getLogger(__name__)
+
+
+def _normalize_text(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def compute_vietnamese_relevance_score(record: dict) -> int:
+    haystack = " ".join(
+        [
+            _normalize_text(record.get("title")),
+            _normalize_text(record.get("description")),
+            _normalize_text(record.get("tags")),
+            _normalize_text(record.get("channel_title")),
+            _normalize_text(record.get("channel_name")),
+        ]
+    )
+    score = 0
+
+    if record.get("country") == "VN":
+        score += 3
+
+    if VIETNAMESE_DIACRITICS_PATTERN.search(haystack):
+        score += 3
+
+    if any(keyword in haystack for keyword in YOUTUBE_PRIORITY_KEYWORDS):
+        score += 2
+
+    if " việt " in f" {haystack} " or " vn " in f" {haystack} ":
+        score += 1
+
+    return score
+
+
+def is_preferred_youtube_record(record: dict) -> bool:
+    if not YOUTUBE_STRICT_VIETNAMESE_ONLY:
+        return True
+    return compute_vietnamese_relevance_score(record) >= YOUTUBE_MIN_VIETNAMESE_SCORE
+
+
+def prioritize_preferred_videos(records: list[dict]) -> list[dict]:
+    enriched_records: list[dict] = []
+    for record in records:
+        normalized = record.copy()
+        normalized["vi_relevance_score"] = compute_vietnamese_relevance_score(record)
+        enriched_records.append(normalized)
+
+    preferred_records = [
+        record for record in enriched_records if is_preferred_youtube_record(record)
+    ]
+    target_records = preferred_records or enriched_records
+    target_records.sort(
+        key=lambda record: (
+            -record["vi_relevance_score"],
+            -int(record.get("view_count") or 0),
+            -int(record.get("like_count") or 0),
+            -int(record.get("comment_count") or 0),
+        )
+    )
+    return [
+        {key: value for key, value in record.items() if key != "vi_relevance_score"}
+        for record in target_records
+    ]
 
 
 def get_youtube_client():
@@ -108,7 +179,7 @@ def fetch_video_details(youtube, video_ids: list[str]) -> list[dict]:
             )
         except HttpError as exc:
             log.error("Error fetching video details: %s", exc)
-    return dedupe_entities(videos, "video_id")
+    return prioritize_preferred_videos(dedupe_entities(videos, "video_id"))
 
 
 def fetch_multi_source_trending_videos(
@@ -142,7 +213,7 @@ def fetch_multi_source_trending_videos(
             except HttpError as exc:
                 log.error("Error fetching trending videos for %s: %s", label, exc)
 
-    deduped_videos = dedupe_entities(videos, "video_id")
+    deduped_videos = prioritize_preferred_videos(dedupe_entities(videos, "video_id"))
     log.info("Fetched %s unique trending videos.", len(deduped_videos))
     return deduped_videos
 
@@ -174,6 +245,7 @@ def fetch_recent_search_videos(
                 maxResults=max_results,
                 publishedAfter=published_after,
                 regionCode=REGION_CODE,
+                relevanceLanguage=YOUTUBE_RELEVANCE_LANGUAGE,
             ).execute()
             for item in response.get("items", []):
                 video_id = item.get("id", {}).get("videoId")
@@ -189,7 +261,7 @@ def fetch_diverse_videos(youtube) -> list[dict]:
     trending_videos = fetch_multi_source_trending_videos(youtube)
     recent_search_videos = fetch_recent_search_videos(youtube)
     all_videos = trending_videos + recent_search_videos
-    deduped_videos = dedupe_entities(all_videos, "video_id")
+    deduped_videos = prioritize_preferred_videos(dedupe_entities(all_videos, "video_id"))
     log.info(
         "Collected %s unique videos from trending + recent search sources.",
         len(deduped_videos),

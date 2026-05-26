@@ -39,18 +39,18 @@ export function DashboardFilters({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Time window</p>
+            <p className="text-sm font-medium text-foreground">Khoảng thời gian</p>
             <Select
               value={String(windowMinutes)}
               onValueChange={(value) => onWindowChange(Number(value) as WindowOption)}
             >
               <SelectTrigger className="w-full min-w-40 bg-background">
-                <SelectValue placeholder="Select a window" />
+                <SelectValue placeholder="Chọn khoảng thời gian" />
               </SelectTrigger>
               <SelectContent>
                 {WINDOW_OPTIONS.map((option) => (
                   <SelectItem key={option} value={String(option)}>
-                    {option} minutes
+                    {option} phút
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -58,18 +58,18 @@ export function DashboardFilters({
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Top N</p>
+            <p className="text-sm font-medium text-foreground">Số lượng hiển thị</p>
             <Select
               value={String(limit)}
               onValueChange={(value) => onLimitChange(Number(value) as LimitOption)}
             >
               <SelectTrigger className="w-full min-w-32 bg-background">
-                <SelectValue placeholder="Select a limit" />
+                <SelectValue placeholder="Chọn số lượng" />
               </SelectTrigger>
               <SelectContent>
                 {LIMIT_OPTIONS.map((option) => (
                   <SelectItem key={option} value={String(option)}>
-                    {option} rows
+                    {option} dòng
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -85,7 +85,7 @@ export function DashboardFilters({
           <RefreshCcw
             className={isRefreshing ? "size-4 animate-spin" : "size-4"}
           />
-          Refresh data
+          Làm mới dữ liệu
         </Button>
       </div>
     </section>

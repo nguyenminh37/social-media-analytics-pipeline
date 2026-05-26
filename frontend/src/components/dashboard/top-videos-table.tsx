@@ -1,7 +1,11 @@
 import { ExternalLink, PlayCircle } from "lucide-react";
 
 import type { TopVideosResponse } from "@/lib/api";
-import { formatNumber, formatTimestamp } from "@/lib/format";
+import {
+  formatNumber,
+  formatSentimentLabel,
+  formatTimestamp,
+} from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -47,10 +51,10 @@ export function TopVideosTable({
   return (
     <Card className="bg-white/88 shadow-[0_20px_70px_-58px_rgba(15,23,42,0.45)]">
       <CardHeader>
-        <CardTitle>Top videos</CardTitle>
+        <CardTitle>Video nổi bật</CardTitle>
         <CardDescription>
-          Ranked from the read-only serving API by engagement score inside the
-          selected window.
+          Xếp hạng từ serving API chỉ đọc theo điểm engagement trong khoảng thời
+          gian đã chọn.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -70,7 +74,7 @@ export function TopVideosTable({
 
         {!isLoading && !hasItems ? (
           <div className="rounded-2xl border bg-background/70 px-4 py-8 text-center text-sm text-muted-foreground">
-            No top videos were returned for the current window.
+            Không có video nào trong khoảng thời gian hiện tại.
           </div>
         ) : null}
 
@@ -85,19 +89,19 @@ export function TopVideosTable({
                     <TableHead>Entity ID</TableHead>
                     <TableHead>Engagement</TableHead>
                     <TableHead>Sentiment</TableHead>
-                    <TableHead>Published</TableHead>
+                    <TableHead>Thời điểm đăng</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.items.map((item, index) => (
-                    <TableRow key={`${item.entity_id}-${index}`}>
+                  <TableRow key={`${item.entity_id}-${index}`}>
                       <TableCell className="font-data text-muted-foreground">
                         {index + 1}
                       </TableCell>
                       <TableCell className="min-w-72 whitespace-normal">
                         <div className="space-y-1">
                           <p className="font-medium text-foreground">
-                            {item.title || "Untitled video"}
+                            {item.title || "Video chưa có tiêu đề"}
                           </p>
                           {item.source_url ? (
                             <a
@@ -106,7 +110,7 @@ export function TopVideosTable({
                               rel="noreferrer"
                               target="_blank"
                             >
-                              Open source
+                              Mở video gốc
                               <ExternalLink className="size-3" />
                             </a>
                           ) : null}
@@ -118,18 +122,18 @@ export function TopVideosTable({
                       <TableCell>
                         <div className="space-y-1 text-sm">
                           <p className="font-data font-medium text-foreground">
-                            Score {formatNumber(item.engagement_score)}
+                            Điểm {formatNumber(item.engagement_score)}
                           </p>
                           <p className="font-data text-xs text-muted-foreground">
-                            {formatNumber(item.engagement_view_count)} views ·{" "}
-                            {formatNumber(item.engagement_like_count)} likes ·{" "}
-                            {formatNumber(item.engagement_comment_count)} comments
+                            {formatNumber(item.engagement_view_count)} lượt xem ·{" "}
+                            {formatNumber(item.engagement_like_count)} lượt thích ·{" "}
+                            {formatNumber(item.engagement_comment_count)} bình luận
                           </p>
                         </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant={sentimentVariant(item.sentiment)}>
-                          {item.sentiment || "unknown"}
+                          {formatSentimentLabel(item.sentiment)}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-data text-xs text-muted-foreground">
@@ -151,14 +155,14 @@ export function TopVideosTable({
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <PlayCircle className="size-4 text-primary" />
-                        Rank {index + 1}
+                        Hạng {index + 1}
                       </div>
                       <p className="font-medium text-foreground">
-                        {item.title || "Untitled video"}
+                        {item.title || "Video chưa có tiêu đề"}
                       </p>
                     </div>
                     <Badge variant={sentimentVariant(item.sentiment)}>
-                      {item.sentiment || "unknown"}
+                      {formatSentimentLabel(item.sentiment)}
                     </Badge>
                   </div>
                   <div className="mt-4 space-y-2 text-sm">
@@ -166,12 +170,12 @@ export function TopVideosTable({
                       {item.entity_id}
                     </p>
                     <p className="font-data">
-                      Score {formatNumber(item.engagement_score)}
+                      Điểm {formatNumber(item.engagement_score)}
                     </p>
                     <p className="font-data text-xs text-muted-foreground">
-                      {formatNumber(item.engagement_view_count)} views ·{" "}
-                      {formatNumber(item.engagement_like_count)} likes ·{" "}
-                      {formatNumber(item.engagement_comment_count)} comments
+                      {formatNumber(item.engagement_view_count)} lượt xem ·{" "}
+                      {formatNumber(item.engagement_like_count)} lượt thích ·{" "}
+                      {formatNumber(item.engagement_comment_count)} bình luận
                     </p>
                     <p className="font-data text-xs text-muted-foreground">
                       {formatTimestamp(item.published_at || item.event_time)}

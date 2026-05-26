@@ -57,7 +57,14 @@ class ServingApiApp:
 
     def render_json(self, method: str, path: str) -> tuple[int, bytes]:
         status, payload = self.handle_request(method, path)
-        return int(status), json.dumps(payload).encode("utf-8")
+        try:
+            body = json.dumps(payload).encode("utf-8")
+        except TypeError as exc:
+            status = HTTPStatus.SERVICE_UNAVAILABLE
+            body = json.dumps(
+                {"error": "response_serialization_error", "detail": str(exc)}
+            ).encode("utf-8")
+        return int(status), body
 
     def _int_param(self, query: dict[str, list[str]], name: str, default: int) -> int:
         raw_value = query.get(name, [str(default)])[0]

@@ -2,10 +2,13 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from collectors.youtube.collector import (
+    compute_vietnamese_relevance_score,
     fetch_channel_info,
     fetch_comments,
+    fetch_recent_search_videos,
     fetch_trending_videos,
     get_youtube_client,
+    prioritize_preferred_videos,
 )
 from schemas.youtube.raw_schema import (
     YOUTUBE_CHANNEL_FIELDS,
@@ -131,6 +134,51 @@ class YouTubeCollectorTests(unittest.TestCase):
         self.assertEqual(set(records[0].keys()), set(YOUTUBE_COMMENT_FIELDS))
         self.assertEqual(records[0]["comment_id"], "cmt001")
         self.assertEqual(records[0]["video_id"], "vid123")
+
+    def test_prioritize_preferred_videos_prefers_vietnamese_hot_content(self):
+        records = [
+            {
+                "video_id": "global-1",
+                "title": "Apple Original Vs Cheap Aftermarket Parts",
+                "description": "repair short",
+                "tags": "",
+                "channel_title": "Tech Shorts",
+                "view_count": "900000",
+                "like_count": "5000",
+                "comment_count": "100",
+            },
+            {
+                "video_id": "vn-1",
+                "title": "Tin tức thời sự mới nhất hôm nay",
+                "description": "Cập nhật thời sự Việt Nam nóng nhất",
+                "tags": "tin tuc|thoi su|viet nam",
+                "channel_title": "Tin Nóng 24h",
+                "view_count": "120000",
+                "like_count": "1200",
+                "comment_count": "90",
+            },
+        ]
+
+        prioritized = prioritize_preferred_videos(records)
+
+        self.assertEqual(prioritized[0]["video_id"], "vn-1")
+        self.assertEqual(len(prioritized), 1)
+        self.assertGreater(compute_vietnamese_relevance_score(prioritized[0]), 0)
+
+    def test_fetch_recent_search_videos_sets_relevance_language(self):
+        youtube = MagicMock()
+        youtube.search.return_value.list.return_value = RequestStub({"items": []})
+
+        fetch_recent_search_videos(
+            youtube,
+            queries=["tin tuc"],
+            max_results=1,
+            published_within_hours=1,
+        )
+
+        youtube.search.return_value.list.assert_called_once()
+        _, kwargs = youtube.search.return_value.list.call_args
+        self.assertEqual(kwargs["relevanceLanguage"], "vi")
 
 
 if __name__ == "__main__":

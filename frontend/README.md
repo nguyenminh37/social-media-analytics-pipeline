@@ -23,7 +23,7 @@ npm install
 npm run dev
 ```
 
-4. Open `http://localhost:3000`.
+4. Open `http://localhost:3001`.
 
 ## Architecture
 
@@ -37,3 +37,7 @@ npm run dev
 ```bash
 ANALYTICS_API_BASE_URL=http://localhost:8081
 ```
+
+## Default frontend port
+
+The frontend uses port `3001` by default because the repo's Docker stack already reserves `3000` for Grafana.

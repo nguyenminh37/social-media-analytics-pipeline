@@ -119,6 +119,13 @@ RESET_CHECKPOINT_ON_START=true .venv/bin/spark-submit \
   spark_jobs/youtube/stream_processor.py
 ```
 
+Mặc định YouTube Spark job sẽ tiếp tục giữ các sink Kafka chạy ngay cả khi sink phụ như MinIO, MongoDB hoặc Elasticsearch đang lỗi tạm thời. Nếu bạn muốn fail-fast để debug sink phụ, bật:
+
+```bash
+FAIL_ON_OPTIONAL_SINK_ERROR=true RESET_CHECKPOINT_ON_START=true .venv/bin/spark-submit \
+  spark_jobs/youtube/stream_processor.py
+```
+
 Hai Spark jobs đều hỗ trợ replay Kappa trên query mới:
 
 ```bash
@@ -212,6 +219,7 @@ python3 scripts/check_sink_freshness.py --max-age-minutes 60
 - `MINIO_RAW_ARCHIVE_PREFIX`: mặc định `kafka_raw`
 - `MONGO_URI`: mặc định `mongodb://localhost:27017`
 - `MONGO_DATABASE`: mặc định `analytics`
+- `FAIL_ON_OPTIONAL_SINK_ERROR`: mặc định `false`, bật `true` nếu muốn Spark fail-fast khi MinIO/MongoDB/Elasticsearch sink lỗi
 - `MONGO_POSTS_TTL_DAYS`: số ngày giữ `posts` trong MongoDB, mặc định `7`
 - `MONGO_METRICS_TTL_DAYS`: số ngày giữ `sentiment_metrics` và `trending_topics`, mặc định `30`
 - `ELASTICSEARCH_HOST`: mặc định `http://localhost:9200`

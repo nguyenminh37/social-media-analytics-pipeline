@@ -2,6 +2,7 @@ import json
 import os
 import sys
 from pathlib import Path
+import logging
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -69,12 +70,17 @@ from spark_jobs.shared.runtime import (
 )
 
 
+log = logging.getLogger(__name__)
+
 CHECKPOINT_BASE = os.getenv(
     "YOUTUBE_CHECKPOINT_BASE", default_checkpoint_base("youtube_stream_processor")
 )
 ENABLE_MINIO_SINK = os.getenv("ENABLE_MINIO_SINK", "true").lower() == "true"
 ENABLE_MONGO_SINK = os.getenv("ENABLE_MONGO_SINK", "true").lower() == "true"
 ENABLE_ES_SINK = os.getenv("ENABLE_ES_SINK", "true").lower() == "true"
+FAIL_ON_OPTIONAL_SINK_ERROR = (
+    os.getenv("FAIL_ON_OPTIONAL_SINK_ERROR", "false").lower() == "true"
+)
 RESET_CHECKPOINT_ON_START = (
     os.getenv("RESET_CHECKPOINT_ON_START", "false").lower() == "true"
 )
@@ -241,12 +247,31 @@ def build_aggregated_metrics_sink_df(
 def write_to_kafka(batch_df: DataFrame, batch_id: int, topic: str) -> None:
     if batch_df.rdd.isEmpty():
         return
+    row_count = batch_df.count()
     (
         batch_df.write.format("kafka")
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
         .option("topic", topic)
         .save()
     )
+    log.info("Batch %s wrote %s rows to Kafka topic %s", batch_id, row_count, topic)
+
+
+def run_optional_sink(
+    sink_name: str,
+    batch_df: DataFrame,
+    batch_id: int,
+    writer,
+    *,
+    strict: bool = FAIL_ON_OPTIONAL_SINK_ERROR,
+) -> None:
+    try:
+        writer(batch_df, batch_id)
+        log.info("Batch %s completed optional sink %s", batch_id, sink_name)
+    except Exception:
+        log.exception("Batch %s failed optional sink %s", batch_id, sink_name)
+        if strict:
+            raise
 
 
 def write_content_to_mongo(batch_df: DataFrame, batch_id: int) -> None:
@@ -263,6 +288,12 @@ def write_content_to_mongo(batch_df: DataFrame, batch_id: int) -> None:
         if operations:
             client[MONGO_DATABASE][YOUTUBE_CONTENT_EVENTS_COLLECTION].bulk_write(
                 operations, ordered=False
+            )
+            log.info(
+                "Batch %s upserted %s YouTube content rows into MongoDB collection %s",
+                batch_id,
+                len(operations),
+                YOUTUBE_CONTENT_EVENTS_COLLECTION,
             )
     finally:
         client.close()
@@ -289,14 +320,31 @@ def write_channels_to_mongo(batch_df: DataFrame, batch_id: int) -> None:
             client[MONGO_DATABASE][YOUTUBE_CHANNEL_SNAPSHOTS_COLLECTION].bulk_write(
                 operations, ordered=False
             )
+            log.info(
+                "Batch %s upserted %s YouTube channel rows into MongoDB collection %s",
+                batch_id,
+                len(operations),
+                YOUTUBE_CHANNEL_SNAPSHOTS_COLLECTION,
+            )
     finally:
         client.close()
+
+
+def flatten_windowed_metric_record(record: dict) -> dict:
+    normalized = record.copy()
+    window = normalized.pop("window", None)
+    if isinstance(window, dict):
+        normalized.setdefault("window_start", window.get("start"))
+        normalized.setdefault("window_end", window.get("end"))
+    return normalized
 
 
 def write_metrics_to_mongo(batch_df: DataFrame, batch_id: int, collection: str) -> None:
     records = [json.loads(row) for row in batch_df.toJSON().collect()]
     if not records:
         return
+    if collection == YOUTUBE_TRENDING_COLLECTION:
+        records = [flatten_windowed_metric_record(record) for record in records]
     records = normalize_mongo_records(records, ("window_start", "window_end"))
     client = MongoClient(MONGO_URI)
     try:
@@ -329,6 +377,12 @@ def write_metrics_to_mongo(batch_df: DataFrame, batch_id: int, collection: str) 
             ]
         if operations:
             client[MONGO_DATABASE][collection].bulk_write(operations, ordered=False)
+            log.info(
+                "Batch %s upserted %s YouTube metric rows into MongoDB collection %s",
+                batch_id,
+                len(operations),
+                collection,
+            )
     finally:
         client.close()
 
@@ -345,6 +399,12 @@ def write_content_to_es(batch_df: DataFrame, batch_id: int) -> None:
                 id=record["entity_id"],
                 document=record,
             )
+        log.info(
+            "Batch %s indexed %s YouTube content rows into Elasticsearch index %s",
+            batch_id,
+            len(records),
+            YOUTUBE_CONTENT_EVENTS_INDEX,
+        )
     finally:
         client.close()
 
@@ -362,6 +422,12 @@ def write_channels_to_es(batch_df: DataFrame, batch_id: int) -> None:
                 id=document_id,
                 document=record,
             )
+        log.info(
+            "Batch %s indexed %s YouTube channel rows into Elasticsearch index %s",
+            batch_id,
+            len(records),
+            YOUTUBE_CHANNEL_SNAPSHOTS_INDEX,
+        )
     finally:
         client.close()
 
@@ -369,6 +435,7 @@ def write_channels_to_es(batch_df: DataFrame, batch_id: int) -> None:
 def main() -> None:
     spark = create_spark_session("YouTubeAnalyticsPipeline")
     spark.sparkContext.setLogLevel("WARN")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     reset_checkpoint_if_requested(spark, CHECKPOINT_BASE, RESET_CHECKPOINT_ON_START)
 
     videos_df, videos_dlq_df = split_valid_and_dlq_rows(
@@ -403,6 +470,7 @@ def main() -> None:
     queries = [
         build_silver_content_sink_df(content_df)
         .writeStream.format("kafka")
+        .queryName("youtube_silver_content_kafka")
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
         .option("topic", SILVER_YOUTUBE_CONTENT_EVENTS_TOPIC)
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/raw_content_to_silver")
@@ -410,6 +478,7 @@ def main() -> None:
         .start(),
         build_channel_snapshot_sink_df(channel_snapshots_df)
         .writeStream.format("kafka")
+        .queryName("youtube_silver_channels_kafka")
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
         .option("topic", SILVER_YOUTUBE_CHANNEL_SNAPSHOTS_TOPIC)
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/raw_channels_to_silver")
@@ -421,11 +490,13 @@ def main() -> None:
                 batch_df, batch_id, YOUTUBE_AGGREGATED_METRICS_TOPIC
             )
         )
+        .queryName("youtube_gold_metrics_kafka")
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/youtube_metrics_kafka")
         .outputMode("update")
         .start(),
         build_dlq_sink_df(youtube_dlq_df)
         .writeStream.format("kafka")
+        .queryName("youtube_dlq_kafka")
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
         .option("topic", PIPELINE_DLQ_TOPIC)
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/youtube_dlq")
@@ -436,34 +507,63 @@ def main() -> None:
     if ENABLE_MINIO_SINK:
         queries.extend(
             [
-                content_df.writeStream.format("parquet")
-                .option("path", f"s3a://{CLEAN_POSTS_BUCKET}/{YOUTUBE_CONTENT_EVENTS_PATH}")
+                content_df.writeStream.foreachBatch(
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "minio_content_parquet",
+                        batch_df,
+                        batch_id,
+                        lambda inner_df, inner_batch_id: write_dataframe_to_parquet(
+                            inner_df,
+                            f"s3a://{CLEAN_POSTS_BUCKET}/{YOUTUBE_CONTENT_EVENTS_PATH}",
+                        ),
+                    )
+                )
+                .queryName("youtube_minio_content")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/content_parquet")
                 .outputMode("append")
                 .start(),
-                channel_snapshots_df.writeStream.format("parquet")
-                .option(
-                    "path",
-                    f"s3a://{CLEAN_POSTS_BUCKET}/{YOUTUBE_CHANNEL_SNAPSHOTS_PATH}",
+                channel_snapshots_df.writeStream.foreachBatch(
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "minio_channel_parquet",
+                        batch_df,
+                        batch_id,
+                        lambda inner_df, inner_batch_id: write_dataframe_to_parquet(
+                            inner_df,
+                            f"s3a://{CLEAN_POSTS_BUCKET}/{YOUTUBE_CHANNEL_SNAPSHOTS_PATH}",
+                        ),
+                    )
                 )
+                .queryName("youtube_minio_channels")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/channels_parquet")
                 .outputMode("append")
                 .start(),
                 sentiment_metrics_df.writeStream.foreachBatch(
-                    lambda batch_df, batch_id: write_dataframe_to_parquet(
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "minio_sentiment_parquet",
                         batch_df,
-                        f"s3a://{AGGREGATES_BUCKET}/{YOUTUBE_AGGREGATES_PATH}/sentiment",
+                        batch_id,
+                        lambda inner_df, inner_batch_id: write_dataframe_to_parquet(
+                            inner_df,
+                            f"s3a://{AGGREGATES_BUCKET}/{YOUTUBE_AGGREGATES_PATH}/sentiment",
+                        ),
                     )
                 )
+                .queryName("youtube_minio_sentiment")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/sentiment_parquet")
                 .outputMode("update")
                 .start(),
                 trending_df.writeStream.foreachBatch(
-                    lambda batch_df, batch_id: write_dataframe_to_parquet(
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "minio_trending_parquet",
                         batch_df,
-                        f"s3a://{AGGREGATES_BUCKET}/{YOUTUBE_AGGREGATES_PATH}/trending",
+                        batch_id,
+                        lambda inner_df, inner_batch_id: write_dataframe_to_parquet(
+                            inner_df,
+                            f"s3a://{AGGREGATES_BUCKET}/{YOUTUBE_AGGREGATES_PATH}/trending",
+                        ),
                     )
                 )
+                .queryName("youtube_minio_trending")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/trending_parquet")
                 .outputMode("update")
                 .start(),
@@ -473,27 +573,55 @@ def main() -> None:
     if ENABLE_MONGO_SINK:
         queries.extend(
             [
-                content_df.writeStream.foreachBatch(write_content_to_mongo)
+                content_df.writeStream.foreachBatch(
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "mongo_content",
+                        batch_df,
+                        batch_id,
+                        write_content_to_mongo,
+                    )
+                )
+                .queryName("youtube_mongo_content")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/mongo_content")
                 .outputMode("append")
                 .start(),
-                channel_snapshots_df.writeStream.foreachBatch(write_channels_to_mongo)
+                channel_snapshots_df.writeStream.foreachBatch(
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "mongo_channels",
+                        batch_df,
+                        batch_id,
+                        write_channels_to_mongo,
+                    )
+                )
+                .queryName("youtube_mongo_channels")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/mongo_channels")
                 .outputMode("append")
                 .start(),
                 sentiment_metrics_df.writeStream.foreachBatch(
-                    lambda batch_df, batch_id: write_metrics_to_mongo(
-                        batch_df, batch_id, YOUTUBE_SENTIMENT_COLLECTION
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "mongo_sentiment",
+                        batch_df,
+                        batch_id,
+                        lambda inner_df, inner_batch_id: write_metrics_to_mongo(
+                            inner_df, inner_batch_id, YOUTUBE_SENTIMENT_COLLECTION
+                        ),
                     )
                 )
+                .queryName("youtube_mongo_sentiment")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/mongo_sentiment")
                 .outputMode("update")
                 .start(),
                 trending_df.writeStream.foreachBatch(
-                    lambda batch_df, batch_id: write_metrics_to_mongo(
-                        batch_df, batch_id, YOUTUBE_TRENDING_COLLECTION
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "mongo_trending",
+                        batch_df,
+                        batch_id,
+                        lambda inner_df, inner_batch_id: write_metrics_to_mongo(
+                            inner_df, inner_batch_id, YOUTUBE_TRENDING_COLLECTION
+                        ),
                     )
                 )
+                .queryName("youtube_mongo_trending")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/mongo_trending")
                 .outputMode("update")
                 .start(),
@@ -503,11 +631,27 @@ def main() -> None:
     if ENABLE_ES_SINK:
         queries.extend(
             [
-                content_df.writeStream.foreachBatch(write_content_to_es)
+                content_df.writeStream.foreachBatch(
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "elasticsearch_content",
+                        batch_df,
+                        batch_id,
+                        write_content_to_es,
+                    )
+                )
+                .queryName("youtube_es_content")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/es_content")
                 .outputMode("append")
                 .start(),
-                channel_snapshots_df.writeStream.foreachBatch(write_channels_to_es)
+                channel_snapshots_df.writeStream.foreachBatch(
+                    lambda batch_df, batch_id: run_optional_sink(
+                        "elasticsearch_channels",
+                        batch_df,
+                        batch_id,
+                        write_channels_to_es,
+                    )
+                )
+                .queryName("youtube_es_channels")
                 .option("checkpointLocation", f"{CHECKPOINT_BASE}/es_channels")
                 .outputMode("append")
                 .start(),

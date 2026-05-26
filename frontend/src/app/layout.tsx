@@ -13,9 +13,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "YouTube Analytics Dashboard",
+  title: "Bảng điều khiển YouTube Analytics",
   description:
-    "Read-only frontend for the YouTube Kappa analytics serving layer.",
+    "Giao diện chỉ đọc cho lớp serving YouTube Kappa analytics.",
 };
 
 export default function RootLayout({
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${ibmPlexMono.variable} h-full antialiased`}>
+    <html lang="vi" className={`${ibmPlexMono.variable} h-full antialiased`}>
       <body className={`${manrope.className} min-h-full flex flex-col`}>
         {children}
       </body>

@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 
 from serving_api.app import ServingApiApp
 from serving_api.service import YouTubeAnalyticsService
@@ -19,6 +20,24 @@ class FakeRepository:
 
     def fetch_freshness(self) -> dict:
         return {"latest_content": None, "latest_sentiment_window": None}
+
+
+class NonSerializableService:
+    def health(self) -> dict:
+        return {"status": "ok"}
+
+    def top_videos(self, window_minutes: int, limit: int) -> dict:
+        return {
+            "window_minutes": window_minutes,
+            "limit": limit,
+            "items": [{"created_at": datetime.now()}],
+        }
+
+    def sentiment_metrics(self, window_minutes: int) -> dict:
+        return {"items": []}
+
+    def trending_keywords(self, window_minutes: int, limit: int) -> dict:
+        return {"items": []}
 
 
 class ServingApiTests(unittest.TestCase):
@@ -42,6 +61,17 @@ class ServingApiTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertIn("latest_content", payload)
+
+    def test_render_json_returns_error_payload_on_serialization_failure(self) -> None:
+        app = ServingApiApp(NonSerializableService())
+
+        status, body = app.render_json(
+            "GET",
+            "/api/youtube/top-videos?window_minutes=120&limit=5",
+        )
+
+        self.assertEqual(status, 503)
+        self.assertIn("response_serialization_error", body.decode("utf-8"))
 
 
 if __name__ == "__main__":

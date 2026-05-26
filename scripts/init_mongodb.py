@@ -30,6 +30,18 @@ from config.storage_config import (
 
 logging.basicConfig(level=logging.INFO)
 
+def create_index_safe(collection, keys, **kwargs):
+    try:
+        collection.create_index(keys, **kwargs)
+    except pymongo.errors.DuplicateKeyError as exc:
+        collection_name = getattr(collection, "name", "unknown")
+        logging.warning(
+            "Could not create index on '%s' with keys %s due to existing duplicates: %s",
+            collection_name,
+            keys,
+            exc,
+        )
+
 def init_mongodb(client: MongoClient, db_name: str):
     db = client[db_name]
     posts_ttl_seconds = int(timedelta(days=MONGO_POSTS_TTL_DAYS).total_seconds())
@@ -39,10 +51,7 @@ def init_mongodb(client: MongoClient, db_name: str):
     
     # 1. Posts Collection Indexes
     posts = db[POSTS_COLLECTION]
-    try:
-        posts.create_index([("id", pymongo.ASCENDING)], unique=True)
-    except pymongo.errors.DuplicateKeyError as e:
-        logging.warning(f"Could not create unique index on 'id' due to existing duplicates: {e}")
+    create_index_safe(posts, [("id", pymongo.ASCENDING)], unique=True)
     posts.create_index([("published_at", pymongo.DESCENDING)])
     posts.create_index([("sentiment", pymongo.ASCENDING)])
     posts.create_index(
@@ -54,7 +63,8 @@ def init_mongodb(client: MongoClient, db_name: str):
     # 2. Sentiment Metrics Indexes
     sentiment = db[SENTIMENT_COLLECTION]
     sentiment.create_index([("window_start", pymongo.DESCENDING)])
-    sentiment.create_index(
+    create_index_safe(
+        sentiment,
         [
             ("window_start", pymongo.ASCENDING),
             ("window_end", pymongo.ASCENDING),
@@ -71,7 +81,8 @@ def init_mongodb(client: MongoClient, db_name: str):
     # 3. Trending Topics Indexes
     trending = db[TRENDING_COLLECTION]
     trending.create_index([("window_start", pymongo.DESCENDING)])
-    trending.create_index(
+    create_index_safe(
+        trending,
         [
             ("window_start", pymongo.ASCENDING),
             ("window_end", pymongo.ASCENDING),
@@ -87,7 +98,11 @@ def init_mongodb(client: MongoClient, db_name: str):
 
     # 4. YouTube Silver Content Indexes
     youtube_content = db[YOUTUBE_CONTENT_EVENTS_COLLECTION]
-    youtube_content.create_index([("entity_id", pymongo.ASCENDING)], unique=True)
+    create_index_safe(
+        youtube_content,
+        [("entity_id", pymongo.ASCENDING)],
+        unique=True,
+    )
     youtube_content.create_index([("entity_type", pymongo.ASCENDING)])
     youtube_content.create_index([("parent_entity_id", pymongo.ASCENDING)])
     youtube_content.create_index([("published_at", pymongo.DESCENDING)])
@@ -100,7 +115,8 @@ def init_mongodb(client: MongoClient, db_name: str):
 
     # 5. YouTube Channel Snapshot Indexes
     youtube_channels = db[YOUTUBE_CHANNEL_SNAPSHOTS_COLLECTION]
-    youtube_channels.create_index(
+    create_index_safe(
+        youtube_channels,
         [("channel_id", pymongo.ASCENDING), ("crawled_at", pymongo.ASCENDING)],
         unique=True,
     )
@@ -115,7 +131,8 @@ def init_mongodb(client: MongoClient, db_name: str):
     # 6. YouTube Metric Indexes
     youtube_sentiment = db[YOUTUBE_SENTIMENT_COLLECTION]
     youtube_sentiment.create_index([("window_start", pymongo.DESCENDING)])
-    youtube_sentiment.create_index(
+    create_index_safe(
+        youtube_sentiment,
         [
             ("window_start", pymongo.ASCENDING),
             ("window_end", pymongo.ASCENDING),
@@ -132,7 +149,8 @@ def init_mongodb(client: MongoClient, db_name: str):
 
     youtube_trending = db[YOUTUBE_TRENDING_COLLECTION]
     youtube_trending.create_index([("window_start", pymongo.DESCENDING)])
-    youtube_trending.create_index(
+    create_index_safe(
+        youtube_trending,
         [
             ("window_start", pymongo.ASCENDING),
             ("window_end", pymongo.ASCENDING),
@@ -148,8 +166,11 @@ def init_mongodb(client: MongoClient, db_name: str):
 
 def main():
     client = MongoClient(MONGO_URI)
-    init_mongodb(client, MONGO_DATABASE)
-    logging.info("MongoDB initialization completed.")
+    try:
+        init_mongodb(client, MONGO_DATABASE)
+        logging.info("MongoDB initialization completed.")
+    finally:
+        client.close()
 
 if __name__ == "__main__":
     main()

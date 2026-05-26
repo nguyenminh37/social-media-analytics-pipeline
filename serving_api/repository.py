@@ -40,6 +40,7 @@ class YouTubeAnalyticsRepository:
                     }
                 }
             },
+            {"$project": {"_id": 0}},
             {"$sort": {"engagement_score": -1, "published_at": -1}},
             {"$limit": limit},
         ]
