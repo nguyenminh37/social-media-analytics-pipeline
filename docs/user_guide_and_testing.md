@@ -45,7 +45,7 @@ python scripts/init_mongodb.py
 **Terminal 1 - Chạy Bộ thu thập (Collector):**
 ```powershell
 .\venv311\Scripts\Activate.ps1
-python collectors/rss_collector.py
+python -m collectors.rss.collector
 ```
 
 **Terminal 2 - Chạy Bộ xử lý lõi (Spark Stream Processor):**
@@ -57,7 +57,7 @@ $env:PYSPARK_PYTHON="$PWD\venv311\Scripts\python.exe"
 $env:PYSPARK_DRIVER_PYTHON="$PWD\venv311\Scripts\python.exe"
 
 .\venv311\Scripts\Activate.ps1
-python spark_jobs/stream_processor.py
+python spark_jobs/legacy_posts/stream_processor.py
 ```
 
 ### 1.5. Giám sát Dashboard
@@ -81,7 +81,6 @@ pytest -v
 **Các bài test bao gồm:**
 - `test_pipeline.py`: Kiểm thử cấu trúc và ép kiểu dữ liệu sự kiện (Event Schema).
 - `test_rss_collector.py`: Kiểm thử cơ chế loại bỏ HTML, chống lỗi link hỏng, và gộp bài trùng.
-- `test_reddit_collector.py`: Kiểm thử việc xử lý API của Reddit.
 - `test_healthcheck.py`: Kiểm thử logic phát hiện lỗi hạ tầng.
 - `test_elasticsearch.py` & `test_mongodb.py`: Đảm bảo kịch bản khởi tạo Mapping/Index chính xác.
 
@@ -111,6 +110,6 @@ docker exec -it sma-kafka kafka-console-consumer --bootstrap-server localhost:90
 Thay vì phải đợi tin tức mới từ RSS, bạn có thể bơm lại toàn bộ file mẫu có sẵn vào thẳng Kafka để test xem tốc độ xử lý của Spark ra sao. Mở 1 Terminal mới chạy:
 ```powershell
 .\venv311\Scripts\Activate.ps1
-python collectors/historical_replay_producer.py sample_data/posts.json --sleep-seconds 0.5
+python -m collectors.historical.replay_producer sample_data/posts.json --sleep-seconds 0.5
 ```
 Sau đó kiểm tra biểu đồ trên Grafana, bạn sẽ thấy cột biểu đồ dựng đứng lên do lượng lớn dữ liệu được bơm vào cùng lúc.

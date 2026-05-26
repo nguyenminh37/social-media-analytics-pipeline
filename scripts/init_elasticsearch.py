@@ -12,6 +12,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from elasticsearch import Elasticsearch
 from config.elasticsearch_config import ELASTICSEARCH_HOST, POSTS_INDEX
+from config.storage_config import (
+    YOUTUBE_CHANNEL_SNAPSHOTS_INDEX,
+    YOUTUBE_CONTENT_EVENTS_INDEX,
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,6 +43,19 @@ def main():
     es = Elasticsearch([ELASTICSEARCH_HOST])
     mapping_file = PROJECT_ROOT / "schemas" / "elasticsearch_mappings.json"
     init_elasticsearch(es, POSTS_INDEX, mapping_file)
+    init_elasticsearch(
+        es,
+        YOUTUBE_CONTENT_EVENTS_INDEX,
+        PROJECT_ROOT / "schemas" / "youtube" / "elasticsearch_content_events_mapping.json",
+    )
+    init_elasticsearch(
+        es,
+        YOUTUBE_CHANNEL_SNAPSHOTS_INDEX,
+        PROJECT_ROOT
+        / "schemas"
+        / "youtube"
+        / "elasticsearch_channel_snapshots_mapping.json",
+    )
 
 if __name__ == "__main__":
     main()
