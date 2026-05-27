@@ -165,6 +165,7 @@ def build_normalized_content_df(news_df: DataFrame, youtube_df: DataFrame) -> Da
         .withColumn("sentiment_model", lit(None).cast("string"))
         .filter(col("content_id").isNotNull())
         .withWatermark("event_time", "2 hours")
+        .dropDuplicates(["content_id"])
     )
 
 
