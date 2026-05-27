@@ -227,8 +227,11 @@ def _json_ready(value):
     return value
 
 
-def dataframe_records(df: DataFrame) -> list[dict]:
-    return [_json_ready(row.asDict(recursive=True)) for row in df.collect()]
+def dataframe_records(df: DataFrame, json_safe: bool = False) -> list[dict]:
+    records = [row.asDict(recursive=True) for row in df.collect()]
+    if json_safe:
+        return [_json_ready(record) for record in records]
+    return records
 
 
 def write_mongo(df: DataFrame, batch_id: int, collection_name: str, key_fields: list[str]) -> None:
@@ -245,7 +248,7 @@ def write_mongo(df: DataFrame, batch_id: int, collection_name: str, key_fields: 
 
 
 def write_elasticsearch(df: DataFrame, batch_id: int, index_name: str, id_fields: list[str]) -> None:
-    records = dataframe_records(df)
+    records = dataframe_records(df, json_safe=True)
     if not records:
         return
     client = Elasticsearch(ELASTICSEARCH_HOST)
