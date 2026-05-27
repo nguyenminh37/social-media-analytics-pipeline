@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -70,24 +69,20 @@ export function FreshnessOverview({
   return (
     <Card className="bg-white/88 shadow-[0_20px_70px_-58px_rgba(15,23,42,0.45)]">
       <CardHeader>
-        <CardTitle>Tổng quan độ mới dữ liệu</CardTitle>
-        <CardDescription>
-          Kiểm tra nhanh xem serving layer có đang nhận dữ liệu YouTube mới từ
-          pipeline hay không.
-        </CardDescription>
+        <CardTitle>Freshness</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between rounded-2xl border bg-background/60 px-4 py-3">
           <div>
-            <p className="text-sm font-medium text-foreground">Thời điểm kiểm tra</p>
+            <p className="text-sm font-medium text-foreground">Checked at</p>
             <p className="font-data text-sm text-muted-foreground">
               {formatTimestamp(data.checked_at)}
             </p>
           </div>
           {error ? (
-            <Badge variant="destructive">Không kết nối được Serving API</Badge>
+            <Badge variant="destructive">Unavailable</Badge>
           ) : (
-            <Badge variant="outline">Kiểm tra độ mới</Badge>
+            <Badge variant="outline">Live</Badge>
           )}
         </div>
 
@@ -101,20 +96,20 @@ export function FreshnessOverview({
           <div className="grid gap-4 md:grid-cols-3">
             <FreshnessTile
               icon={<Clock3 className="size-4" />}
-              label="Sự kiện content gần nhất"
+              label="Latest content"
               staleAfterMinutes={120}
-              subtitle={data.latest_content?.entity_id || "Chưa có mã entity content gần nhất."}
+              subtitle={data.latest_content?.entity_id || "No entity_id"}
               timestamp={data.latest_content?.event_time}
             />
             <FreshnessTile
               icon={<TimerReset className="size-4" />}
-              label="Cửa sổ sentiment gần nhất"
+              label="Latest sentiment window"
               staleAfterMinutes={240}
               timestamp={data.latest_sentiment_window?.window_end}
             />
             <FreshnessTile
               icon={<Waves className="size-4" />}
-              label="Cửa sổ trending gần nhất"
+              label="Latest trending window"
               staleAfterMinutes={240}
               timestamp={data.latest_trending_window?.window_end}
             />

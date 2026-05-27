@@ -1,8 +1,41 @@
-export const WINDOW_OPTIONS = [60, 180, 720, 1440] as const;
-export const LIMIT_OPTIONS = [5, 10, 20] as const;
+export const HOURS_OPTIONS = [24, 72, 168, 720] as const;
+export const DEFAULT_PAGE_SIZE = 10;
 
-export type WindowOption = (typeof WINDOW_OPTIONS)[number];
-export type LimitOption = (typeof LIMIT_OPTIONS)[number];
+export const HOURS_OPTION_LABELS: Record<(typeof HOURS_OPTIONS)[number], string> = {
+  24: "Last 24h",
+  72: "Last 3d",
+  168: "Last 7d",
+  720: "Last 30d",
+};
+
+export type HoursOption = (typeof HOURS_OPTIONS)[number];
+export type FilterMode = "hours" | "date_range";
+
+export interface DashboardFilter {
+  filterMode: FilterMode;
+  windowHours: HoursOption;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export interface PaginationResponse {
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  has_previous_page: boolean;
+  has_next_page: boolean;
+  filter_mode?: FilterMode | null;
+  window_hours?: number | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  from_time?: string | null;
+  to_time?: string | null;
+}
+
+export function getHoursOptionLabel(windowHours: number) {
+  return HOURS_OPTION_LABELS[windowHours as HoursOption] ?? `Last ${windowHours}h`;
+}
 
 export interface HealthResponse {
   status: "ok" | "error" | "unknown";
@@ -30,15 +63,18 @@ export interface TopVideoItem {
   sentiment?: string | null;
   published_at?: string | null;
   event_time?: string | null;
+  ranking_timestamp?: string | null;
   engagement_score?: number | null;
+  base_engagement_score?: number | null;
+  recency_multiplier?: number | null;
   engagement_view_count?: number | null;
   engagement_like_count?: number | null;
   engagement_comment_count?: number | null;
 }
 
-export interface TopVideosResponse {
-  window_minutes: number;
-  limit: number;
+export interface TopVideosResponse extends PaginationResponse {
+  ranking_mode?: string | null;
+  latest_event_time?: string | null;
   items: TopVideoItem[];
 }
 
@@ -46,13 +82,11 @@ export interface SentimentMetricItem {
   sentiment?: string | null;
   entity_type?: string | null;
   event_count?: number | null;
-  average_sentiment_score?: number | null;
-  window_start?: string | null;
-  window_end?: string | null;
 }
 
-export interface SentimentMetricsResponse {
-  window_minutes: number;
+export interface SentimentMetricsResponse extends PaginationResponse {
+  latest_window_end?: string | null;
+  total_events?: number | null;
   items: SentimentMetricItem[];
 }
 
@@ -64,9 +98,9 @@ export interface TrendingKeywordItem {
   window_end?: string | null;
 }
 
-export interface TrendingKeywordsResponse {
-  window_minutes: number;
-  limit: number;
+export interface TrendingKeywordsResponse extends PaginationResponse {
+  window_start?: string | null;
+  window_end?: string | null;
   items: TrendingKeywordItem[];
 }
 
@@ -91,6 +125,27 @@ function asNumber(value: unknown) {
 
 function asArray(value: unknown) {
   return Array.isArray(value) ? value : [];
+}
+
+function normalizePaginationResponse(value: unknown): PaginationResponse {
+  const record = asObject(value);
+  const filterMode = asString(record.filter_mode);
+
+  return {
+    page: asNumber(record.page) ?? 1,
+    page_size: asNumber(record.page_size) ?? DEFAULT_PAGE_SIZE,
+    total_items: asNumber(record.total_items) ?? 0,
+    total_pages: asNumber(record.total_pages) ?? 0,
+    has_previous_page: record.has_previous_page === true,
+    has_next_page: record.has_next_page === true,
+    filter_mode:
+      filterMode === "hours" || filterMode === "date_range" ? filterMode : null,
+    window_hours: asNumber(record.window_hours),
+    date_from: asString(record.date_from),
+    date_to: asString(record.date_to),
+    from_time: asString(record.from_time),
+    to_time: asString(record.to_time),
+  };
 }
 
 function normalizeFreshnessMarker(value: unknown): FreshnessMarker | null {
@@ -134,8 +189,9 @@ export function normalizeFreshnessResponse(value: unknown): FreshnessResponse {
 export function normalizeTopVideosResponse(value: unknown): TopVideosResponse {
   const record = asObject(value);
   return {
-    window_minutes: asNumber(record.window_minutes) ?? 0,
-    limit: asNumber(record.limit) ?? 0,
+    ...normalizePaginationResponse(record),
+    ranking_mode: asString(record.ranking_mode),
+    latest_event_time: asString(record.latest_event_time),
     items: asArray(record.items).map((item) => {
       const video = asObject(item);
       return {
@@ -145,7 +201,10 @@ export function normalizeTopVideosResponse(value: unknown): TopVideosResponse {
         sentiment: asString(video.sentiment),
         published_at: asString(video.published_at),
         event_time: asString(video.event_time),
+        ranking_timestamp: asString(video.ranking_timestamp),
         engagement_score: asNumber(video.engagement_score),
+        base_engagement_score: asNumber(video.base_engagement_score),
+        recency_multiplier: asNumber(video.recency_multiplier),
         engagement_view_count: asNumber(video.engagement_view_count),
         engagement_like_count: asNumber(video.engagement_like_count),
         engagement_comment_count: asNumber(video.engagement_comment_count),
@@ -159,18 +218,15 @@ export function normalizeSentimentMetricsResponse(
 ): SentimentMetricsResponse {
   const record = asObject(value);
   return {
-    window_minutes: asNumber(record.window_minutes) ?? 0,
+    ...normalizePaginationResponse(record),
+    latest_window_end: asString(record.latest_window_end),
+    total_events: asNumber(record.total_events),
     items: asArray(record.items).map((item) => {
       const metric = asObject(item);
       return {
         sentiment: asString(metric.sentiment),
         entity_type: asString(metric.entity_type),
         event_count: asNumber(metric.event_count),
-        average_sentiment_score:
-          asNumber(metric.average_sentiment_score) ??
-          asNumber(metric.avg_sentiment_score),
-        window_start: asString(metric.window_start),
-        window_end: asString(metric.window_end),
       };
     }),
   };
@@ -181,8 +237,9 @@ export function normalizeTrendingKeywordsResponse(
 ): TrendingKeywordsResponse {
   const record = asObject(value);
   return {
-    window_minutes: asNumber(record.window_minutes) ?? 0,
-    limit: asNumber(record.limit) ?? 0,
+    ...normalizePaginationResponse(record),
+    window_start: asString(record.window_start),
+    window_end: asString(record.window_end),
     items: asArray(record.items).map((item) => {
       const keyword = asObject(item);
       return {
@@ -201,7 +258,7 @@ function extractErrorMessage(payload: unknown, fallbackStatus: number) {
   return (
     asString(record.detail) ??
     asString(record.error) ??
-    `Yêu cầu thất bại với mã trạng thái ${fallbackStatus}.`
+    `Request failed with status ${fallbackStatus}.`
   );
 }
 
@@ -239,9 +296,24 @@ async function requestProxy<T>(
       error:
         error instanceof Error
           ? error.message
-          : "Dashboard không thể kết nối tới proxy cục bộ.",
+          : "Dashboard cannot reach the local proxy.",
     };
   }
+}
+
+function buildFilterSearchParams(filter: DashboardFilter) {
+  if (filter.filterMode === "date_range") {
+    return {
+      filter_mode: "date_range",
+      date_from: filter.dateFrom,
+      date_to: filter.dateTo,
+    } as const;
+  }
+
+  return {
+    filter_mode: "hours",
+    window_hours: filter.windowHours,
+  } as const;
 }
 
 export function fetchHealth() {
@@ -252,36 +324,37 @@ export function fetchFreshness() {
   return requestProxy("/api/youtube/freshness", {}, normalizeFreshnessResponse);
 }
 
-export function fetchTopVideos(windowMinutes: WindowOption, limit: LimitOption) {
+export function fetchTopVideos(filter: DashboardFilter, page: number) {
   return requestProxy(
     "/api/youtube/top-videos",
     {
-      window_minutes: windowMinutes,
-      limit,
+      ...buildFilterSearchParams(filter),
+      page,
+      page_size: DEFAULT_PAGE_SIZE,
     },
     normalizeTopVideosResponse,
   );
 }
 
-export function fetchSentimentMetrics(windowMinutes: WindowOption) {
+export function fetchSentimentMetrics(filter: DashboardFilter, page: number) {
   return requestProxy(
     "/api/youtube/sentiment-metrics",
     {
-      window_minutes: windowMinutes,
+      ...buildFilterSearchParams(filter),
+      page,
+      page_size: DEFAULT_PAGE_SIZE,
     },
     normalizeSentimentMetricsResponse,
   );
 }
 
-export function fetchTrendingKeywords(
-  windowMinutes: WindowOption,
-  limit: LimitOption,
-) {
+export function fetchTrendingKeywords(filter: DashboardFilter, page: number) {
   return requestProxy(
     "/api/youtube/trending-keywords",
     {
-      window_minutes: windowMinutes,
-      limit,
+      ...buildFilterSearchParams(filter),
+      page,
+      page_size: DEFAULT_PAGE_SIZE,
     },
     normalizeTrendingKeywordsResponse,
   );

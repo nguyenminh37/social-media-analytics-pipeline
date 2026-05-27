@@ -1,6 +1,11 @@
 import json
+from datetime import UTC, date, datetime, time, timedelta
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlparse
+
+
+DEFAULT_PAGE_SIZE = 10
+DEFAULT_WINDOW_HOURS = 24
 
 
 class ServingApiApp:
@@ -29,17 +34,21 @@ class ServingApiApp:
                 return status, payload
             if parsed.path == "/api/youtube/top-videos":
                 return HTTPStatus.OK, self._service.top_videos(
-                    window_minutes=self._int_param(query, "window_minutes", 1440),
-                    limit=self._int_param(query, "limit", 10),
+                    **self._time_filter_params(query),
+                    page=self._int_param(query, "page", 1),
+                    page_size=self._int_param(query, "page_size", DEFAULT_PAGE_SIZE),
                 )
             if parsed.path == "/api/youtube/sentiment-metrics":
                 return HTTPStatus.OK, self._service.sentiment_metrics(
-                    window_minutes=self._int_param(query, "window_minutes", 180)
+                    **self._time_filter_params(query),
+                    page=self._int_param(query, "page", 1),
+                    page_size=self._int_param(query, "page_size", DEFAULT_PAGE_SIZE),
                 )
             if parsed.path == "/api/youtube/trending-keywords":
                 return HTTPStatus.OK, self._service.trending_keywords(
-                    window_minutes=self._int_param(query, "window_minutes", 180),
-                    limit=self._int_param(query, "limit", 20),
+                    **self._time_filter_params(query),
+                    page=self._int_param(query, "page", 1),
+                    page_size=self._int_param(query, "page_size", DEFAULT_PAGE_SIZE),
                 )
             if parsed.path == "/api/youtube/freshness":
                 health_payload = self._service.health()
@@ -70,3 +79,40 @@ class ServingApiApp:
         raw_value = query.get(name, [str(default)])[0]
         value = int(raw_value)
         return max(value, 1)
+
+    def _time_filter_params(self, query: dict[str, list[str]]) -> dict:
+        filter_mode = query.get("filter_mode", ["hours"])[0]
+        if filter_mode == "hours":
+            window_hours = self._int_param(query, "window_hours", DEFAULT_WINDOW_HOURS)
+            to_time = datetime.now(UTC)
+            from_time = to_time - timedelta(hours=window_hours)
+            return {
+                "filter_mode": filter_mode,
+                "window_hours": window_hours,
+                "date_from": None,
+                "date_to": None,
+                "from_time": from_time,
+                "to_time": to_time,
+            }
+        if filter_mode == "date_range":
+            date_from = self._date_param(query, "date_from")
+            date_to = self._date_param(query, "date_to")
+            if date_from > date_to:
+                raise ValueError("invalid_date_range")
+            from_time = datetime.combine(date_from, time.min, tzinfo=UTC)
+            to_time = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+            return {
+                "filter_mode": filter_mode,
+                "window_hours": None,
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "from_time": from_time,
+                "to_time": to_time,
+            }
+        raise ValueError("invalid_filter_mode")
+
+    def _date_param(self, query: dict[str, list[str]], name: str) -> date:
+        raw_value = query.get(name, [None])[0]
+        if not raw_value:
+            raise ValueError(f"missing_{name}")
+        return date.fromisoformat(raw_value)

@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from kafka import KafkaProducer
 
-from config.kafka_config import KAFKA_BOOTSTRAP_SERVERS, RAW_POSTS_TOPIC
+from config.kafka_config import KAFKA_BOOTSTRAP_SERVERS
 
 
 logging.basicConfig(
@@ -85,7 +85,7 @@ def create_producer() -> KafkaProducer:
 def publish_events(
     producer: KafkaProducer,
     events: list[dict],
-    topic: str = RAW_POSTS_TOPIC,
+    topic: str,
 ) -> int:
     for event in events:
         producer.send(topic, event).get(timeout=10)

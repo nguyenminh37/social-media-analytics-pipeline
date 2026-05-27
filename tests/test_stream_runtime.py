@@ -11,9 +11,9 @@ class StreamRuntimeTests(unittest.TestCase):
             os.environ.pop("KAFKA_STREAM_STARTING_TIMESTAMP", None)
             os.environ.pop("KAFKA_STREAM_STARTING_OFFSETS", None)
 
-            options = build_kafka_source_options("raw_posts")
+            options = build_kafka_source_options("raw_youtube_videos")
 
-        self.assertEqual(options["subscribe"], "raw_posts")
+        self.assertEqual(options["subscribe"], "raw_youtube_videos")
         self.assertEqual(options["startingOffsets"], "earliest")
 
     def test_build_kafka_source_options_prefers_timestamp_replay(self) -> None:
@@ -25,7 +25,7 @@ class StreamRuntimeTests(unittest.TestCase):
             },
             clear=False,
         ):
-            options = build_kafka_source_options("raw_posts")
+            options = build_kafka_source_options("raw_youtube_videos")
 
         self.assertEqual(options["startingTimestamp"], "1716710400000")
         self.assertEqual(options["startingOffsetsByTimestampStrategy"], "latest")
@@ -34,4 +34,3 @@ class StreamRuntimeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -5,7 +5,7 @@ datasources:
     type: elasticsearch
     access: proxy
     url: http://elasticsearch:9200
-    database: "processed_posts"
+    database: "youtube_content_events"
     jsonData:
       timeField: "published_at"
       esVersion: "8.0.0"

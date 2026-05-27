@@ -8,9 +8,14 @@ const compactNumberFormatter = new Intl.NumberFormat("en", {
   maximumFractionDigits: 1,
 });
 
+const percentFormatter = new Intl.NumberFormat("vi-VN", {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+
 export function formatTimestamp(value?: string | null) {
   if (!value) {
-    return "Chưa có dữ liệu";
+    return "No data";
   }
 
   const date = new Date(value);
@@ -23,10 +28,18 @@ export function formatTimestamp(value?: string | null) {
 
 export function formatNumber(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return "không có";
+    return "n/a";
   }
 
   return compactNumberFormatter.format(value);
+}
+
+export function formatPercent(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "n/a";
+  }
+
+  return percentFormatter.format(value);
 }
 
 export function formatEntityTypeLabel(value?: string | null) {
@@ -34,30 +47,30 @@ export function formatEntityTypeLabel(value?: string | null) {
     case "video":
       return "Video";
     case "comment":
-      return "Bình luận";
+      return "Comment";
     case "channel":
-      return "Kênh";
+      return "Channel";
     default:
-      return value || "Tất cả entity";
+      return value || "Unclassified";
   }
 }
 
 export function formatSentimentLabel(value?: string | null) {
   switch (value?.toLowerCase()) {
     case "positive":
-      return "Tích cực";
+      return "Positive";
     case "negative":
-      return "Tiêu cực";
+      return "Negative";
     case "neutral":
-      return "Trung tính";
+      return "Neutral";
     default:
-      return value || "Không rõ";
+      return value || "Unknown";
   }
 }
 
 export function formatScore(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return "không có";
+    return "n/a";
   }
 
   return value.toFixed(2);
@@ -65,32 +78,32 @@ export function formatScore(value?: number | null) {
 
 export function relativeAgeLabel(value?: string | null) {
   if (!value) {
-    return "Thiếu dữ liệu";
+    return "Missing";
   }
 
   const timestamp = new Date(value).getTime();
   if (Number.isNaN(timestamp)) {
-    return "Không xác định";
+    return "Unknown";
   }
 
   const diffMs = Date.now() - timestamp;
   const diffMinutes = Math.max(Math.round(diffMs / 60000), 0);
 
   if (diffMinutes < 1) {
-    return "Vừa xong";
+    return "Just now";
   }
 
   if (diffMinutes < 60) {
-    return `${diffMinutes} phút trước`;
+    return `${diffMinutes} min ago`;
   }
 
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) {
-    return `${diffHours} giờ trước`;
+    return `${diffHours} h ago`;
   }
 
   const diffDays = Math.round(diffHours / 24);
-  return `${diffDays} ngày trước`;
+  return `${diffDays} d ago`;
 }
 
 export function getFreshnessState(
@@ -99,8 +112,8 @@ export function getFreshnessState(
 ) {
   if (!value) {
     return {
-      label: "Thiếu dữ liệu",
-      detail: "Chưa có sự kiện nào được materialize.",
+      label: "Missing",
+      detail: "No materialized events.",
       tone: "destructive" as const,
     };
   }
@@ -108,8 +121,8 @@ export function getFreshnessState(
   const timestamp = new Date(value).getTime();
   if (Number.isNaN(timestamp)) {
     return {
-      label: "Không xác định",
-      detail: "Định dạng thời gian không đọc được.",
+      label: "Unknown",
+      detail: "Unreadable timestamp.",
       tone: "outline" as const,
     };
   }
@@ -117,23 +130,23 @@ export function getFreshnessState(
   const ageMinutes = Math.max(Math.round((Date.now() - timestamp) / 60000), 0);
   if (ageMinutes > staleAfterMinutes) {
     return {
-      label: "Cũ",
-      detail: `Cũ hơn ${staleAfterMinutes} phút.`,
+      label: "Stale",
+      detail: `Older than ${staleAfterMinutes} min.`,
       tone: "destructive" as const,
     };
   }
 
   if (ageMinutes > Math.round(staleAfterMinutes * 0.5)) {
     return {
-      label: "Đang cũ dần",
-      detail: `Chậm ${ageMinutes} phút so với lần kiểm tra gần nhất.`,
+      label: "Aging",
+      detail: `${ageMinutes} min behind.`,
       tone: "outline" as const,
     };
   }
 
   return {
-    label: "Mới",
-    detail: `Chậm ${ageMinutes} phút so với lần kiểm tra gần nhất.`,
+    label: "Fresh",
+    detail: `${ageMinutes} min behind.`,
     tone: "secondary" as const,
   };
 }

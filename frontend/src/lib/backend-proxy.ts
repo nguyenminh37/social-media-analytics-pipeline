@@ -38,7 +38,7 @@ export async function proxyBackendRequest(
         detail:
           error instanceof Error
             ? error.message
-            : "Không xác định được lỗi kết nối tới backend.",
+            : "Unknown backend connection error.",
       },
       status: 503,
     };

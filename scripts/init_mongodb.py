@@ -17,9 +17,6 @@ from config.mongo_config import (
     MONGO_METRICS_TTL_DAYS,
     MONGO_POSTS_TTL_DAYS,
     MONGO_URI,
-    POSTS_COLLECTION,
-    SENTIMENT_COLLECTION,
-    TRENDING_COLLECTION,
 )
 from config.storage_config import (
     YOUTUBE_CHANNEL_SNAPSHOTS_COLLECTION,
@@ -42,61 +39,46 @@ def create_index_safe(collection, keys, **kwargs):
             exc,
         )
 
+
+def drop_legacy_trending_unique_index(collection) -> None:
+    legacy_keys = [
+        ("window_start", pymongo.ASCENDING),
+        ("window_end", pymongo.ASCENDING),
+        ("keyword", pymongo.ASCENDING),
+    ]
+    desired_keys = [
+        ("window_start", pymongo.ASCENDING),
+        ("window_end", pymongo.ASCENDING),
+        ("entity_type", pymongo.ASCENDING),
+        ("keyword", pymongo.ASCENDING),
+    ]
+    try:
+        index_info = collection.index_information()
+    except Exception as exc:  # pragma: no cover - defensive
+        logging.warning("Could not inspect indexes for trending collection: %s", exc)
+        return
+
+    for index_name, info in index_info.items():
+        if info.get("key") == desired_keys:
+            return
+
+    for index_name, info in index_info.items():
+        if info.get("key") == legacy_keys and info.get("unique"):
+            collection.drop_index(index_name)
+            logging.info(
+                "Dropped legacy trending unique index %s to include entity_type",
+                index_name,
+            )
+            return
+
 def init_mongodb(client: MongoClient, db_name: str):
     db = client[db_name]
     posts_ttl_seconds = int(timedelta(days=MONGO_POSTS_TTL_DAYS).total_seconds())
     metrics_ttl_seconds = int(
         timedelta(days=MONGO_METRICS_TTL_DAYS).total_seconds()
     )
-    
-    # 1. Posts Collection Indexes
-    posts = db[POSTS_COLLECTION]
-    create_index_safe(posts, [("id", pymongo.ASCENDING)], unique=True)
-    posts.create_index([("published_at", pymongo.DESCENDING)])
-    posts.create_index([("sentiment", pymongo.ASCENDING)])
-    posts.create_index(
-        [("ingested_at", pymongo.ASCENDING)],
-        expireAfterSeconds=posts_ttl_seconds,
-    )
-    logging.info(f"Created indexes for {POSTS_COLLECTION}")
 
-    # 2. Sentiment Metrics Indexes
-    sentiment = db[SENTIMENT_COLLECTION]
-    sentiment.create_index([("window_start", pymongo.DESCENDING)])
-    create_index_safe(
-        sentiment,
-        [
-            ("window_start", pymongo.ASCENDING),
-            ("window_end", pymongo.ASCENDING),
-            ("sentiment", pymongo.ASCENDING),
-        ],
-        unique=True,
-    )
-    sentiment.create_index(
-        [("window_end", pymongo.ASCENDING)],
-        expireAfterSeconds=metrics_ttl_seconds,
-    )
-    logging.info(f"Created indexes for {SENTIMENT_COLLECTION}")
-
-    # 3. Trending Topics Indexes
-    trending = db[TRENDING_COLLECTION]
-    trending.create_index([("window_start", pymongo.DESCENDING)])
-    create_index_safe(
-        trending,
-        [
-            ("window_start", pymongo.ASCENDING),
-            ("window_end", pymongo.ASCENDING),
-            ("keyword", pymongo.ASCENDING),
-        ],
-        unique=True,
-    )
-    trending.create_index(
-        [("window_end", pymongo.ASCENDING)],
-        expireAfterSeconds=metrics_ttl_seconds,
-    )
-    logging.info(f"Created indexes for {TRENDING_COLLECTION}")
-
-    # 4. YouTube Silver Content Indexes
+    # 1. YouTube Silver Content Indexes
     youtube_content = db[YOUTUBE_CONTENT_EVENTS_COLLECTION]
     create_index_safe(
         youtube_content,
@@ -105,6 +87,7 @@ def init_mongodb(client: MongoClient, db_name: str):
     )
     youtube_content.create_index([("entity_type", pymongo.ASCENDING)])
     youtube_content.create_index([("parent_entity_id", pymongo.ASCENDING)])
+    youtube_content.create_index([("event_time", pymongo.DESCENDING)])
     youtube_content.create_index([("published_at", pymongo.DESCENDING)])
     youtube_content.create_index([("sentiment", pymongo.ASCENDING)])
     youtube_content.create_index(
@@ -113,7 +96,7 @@ def init_mongodb(client: MongoClient, db_name: str):
     )
     logging.info(f"Created indexes for {YOUTUBE_CONTENT_EVENTS_COLLECTION}")
 
-    # 5. YouTube Channel Snapshot Indexes
+    # 2. YouTube Channel Snapshot Indexes
     youtube_channels = db[YOUTUBE_CHANNEL_SNAPSHOTS_COLLECTION]
     create_index_safe(
         youtube_channels,
@@ -128,7 +111,7 @@ def init_mongodb(client: MongoClient, db_name: str):
     )
     logging.info(f"Created indexes for {YOUTUBE_CHANNEL_SNAPSHOTS_COLLECTION}")
 
-    # 6. YouTube Metric Indexes
+    # 3. YouTube Metric Indexes
     youtube_sentiment = db[YOUTUBE_SENTIMENT_COLLECTION]
     youtube_sentiment.create_index([("window_start", pymongo.DESCENDING)])
     create_index_safe(
@@ -149,11 +132,13 @@ def init_mongodb(client: MongoClient, db_name: str):
 
     youtube_trending = db[YOUTUBE_TRENDING_COLLECTION]
     youtube_trending.create_index([("window_start", pymongo.DESCENDING)])
+    drop_legacy_trending_unique_index(youtube_trending)
     create_index_safe(
         youtube_trending,
         [
             ("window_start", pymongo.ASCENDING),
             ("window_end", pymongo.ASCENDING),
+            ("entity_type", pymongo.ASCENDING),
             ("keyword", pymongo.ASCENDING),
         ],
         unique=True,

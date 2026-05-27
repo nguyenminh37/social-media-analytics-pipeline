@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
@@ -11,11 +12,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from elasticsearch import Elasticsearch
-from config.elasticsearch_config import ELASTICSEARCH_HOST, POSTS_INDEX
 from config.storage_config import (
     YOUTUBE_CHANNEL_SNAPSHOTS_INDEX,
     YOUTUBE_CONTENT_EVENTS_INDEX,
 )
+
+
+ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -41,8 +44,6 @@ def init_elasticsearch(es_client: Elasticsearch, index_name: str, mapping_path: 
 
 def main():
     es = Elasticsearch([ELASTICSEARCH_HOST])
-    mapping_file = PROJECT_ROOT / "schemas" / "elasticsearch_mappings.json"
-    init_elasticsearch(es, POSTS_INDEX, mapping_file)
     init_elasticsearch(
         es,
         YOUTUBE_CONTENT_EVENTS_INDEX,

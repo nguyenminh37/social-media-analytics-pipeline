@@ -1,16 +1,19 @@
-import type { SentimentMetricsResponse } from "@/lib/api";
+import {
+  getHoursOptionLabel,
+  type SentimentMetricsResponse,
+} from "@/lib/api";
 import {
   formatEntityTypeLabel,
   formatNumber,
-  formatScore,
+  formatPercent,
   formatSentimentLabel,
   formatTimestamp,
 } from "@/lib/format";
+import { PaginationControls } from "@/components/dashboard/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -28,6 +31,8 @@ interface SentimentMetricsPanelProps {
   data: SentimentMetricsResponse;
   error: string | null;
   isLoading: boolean;
+  isRefreshing: boolean;
+  onPageChange: (page: number) => void;
 }
 
 function sentimentVariant(sentiment?: string | null) {
@@ -45,16 +50,23 @@ export function SentimentMetricsPanel({
   data,
   error,
   isLoading,
+  isRefreshing,
+  onPageChange,
 }: SentimentMetricsPanelProps) {
   const hasItems = data.items.length > 0;
+  const totalEvents =
+    data.total_events ??
+    data.items.reduce((sum, item) => sum + (item.event_count ?? 0), 0);
+
+  const filterLabel =
+    data.filter_mode === "date_range"
+      ? `${data.date_from || "?"} -> ${data.date_to || "?"}`
+      : getHoursOptionLabel(data.window_hours ?? 0);
 
   return (
     <Card className="bg-white/88 shadow-[0_20px_70px_-58px_rgba(15,23,42,0.45)]">
       <CardHeader>
-        <CardTitle>Chỉ số sentiment</CardTitle>
-        <CardDescription>
-          Các lát cắt sentiment tổng hợp theo cửa sổ thời gian từ backend.
-        </CardDescription>
+        <CardTitle>Sentiment</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && !hasItems ? (
@@ -73,22 +85,58 @@ export function SentimentMetricsPanel({
 
         {!isLoading && !hasItems ? (
           <div className="rounded-2xl border bg-background/70 px-4 py-8 text-center text-sm text-muted-foreground">
-            Không có dữ liệu sentiment trong khoảng thời gian đã chọn.
+            No results.
           </div>
         ) : null}
 
         {hasItems ? (
           <>
+            <div className="grid gap-3 rounded-2xl border bg-background/60 px-4 py-3 text-sm md:grid-cols-2">
+              <div>
+                <p className="font-medium text-foreground">Events</p>
+                <p className="font-data text-muted-foreground">
+                  {formatNumber(totalEvents)}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Latest window</p>
+                <p className="font-data text-muted-foreground">
+                  {formatTimestamp(data.latest_window_end)}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Filter</p>
+                <p className="font-data text-muted-foreground">{filterLabel}</p>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Page</p>
+                <p className="font-data text-muted-foreground">
+                  {data.page} / {Math.max(data.total_pages, 1)}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Page {data.page} / {Math.max(data.total_pages, 1)}
+              </p>
+              <PaginationControls
+                currentPage={data.page}
+                hasNextPage={data.has_next_page}
+                hasPreviousPage={data.has_previous_page}
+                isDisabled={isRefreshing}
+                onPageChange={onPageChange}
+                totalPages={data.total_pages}
+              />
+            </div>
             <div className="hidden md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Loại dữ liệu</TableHead>
+                    <TableHead>Entity type</TableHead>
                     <TableHead>Sentiment</TableHead>
-                    <TableHead>Bắt đầu</TableHead>
-                    <TableHead>Kết thúc</TableHead>
-                    <TableHead>Số sự kiện</TableHead>
-                    <TableHead>Điểm trung bình</TableHead>
+                    <TableHead>Events</TableHead>
+                    <TableHead>Share</TableHead>
+                    <TableHead>Latest window</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -102,17 +150,14 @@ export function SentimentMetricsPanel({
                           {formatSentimentLabel(item.sentiment)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="font-data text-xs text-muted-foreground">
-                        {formatTimestamp(item.window_start)}
-                      </TableCell>
-                      <TableCell className="font-data text-xs text-muted-foreground">
-                        {formatTimestamp(item.window_end)}
-                      </TableCell>
                       <TableCell className="font-data">
                         {formatNumber(item.event_count)}
                       </TableCell>
                       <TableCell className="font-data">
-                        {formatScore(item.average_sentiment_score)}
+                        {formatPercent((item.event_count ?? 0) / Math.max(totalEvents, 1))}
+                      </TableCell>
+                      <TableCell className="font-data text-xs text-muted-foreground">
+                        {formatTimestamp(data.latest_window_end)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -132,8 +177,7 @@ export function SentimentMetricsPanel({
                         {formatEntityTypeLabel(item.entity_type)}
                       </p>
                       <p className="font-data text-xs text-muted-foreground">
-                        {formatTimestamp(item.window_start)} đến{" "}
-                        {formatTimestamp(item.window_end)}
+                        {formatTimestamp(data.latest_window_end)}
                       </p>
                     </div>
                     <Badge variant={sentimentVariant(item.sentiment)}>
@@ -143,15 +187,15 @@ export function SentimentMetricsPanel({
 
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <div className="rounded-xl border bg-white/60 p-3">
-                      <p className="text-xs text-muted-foreground">Số sự kiện</p>
+                      <p className="text-xs text-muted-foreground">Events</p>
                       <p className="font-data mt-1 text-lg font-semibold text-foreground">
                         {formatNumber(item.event_count)}
                       </p>
                     </div>
                     <div className="rounded-xl border bg-white/60 p-3">
-                      <p className="text-xs text-muted-foreground">Điểm trung bình</p>
+                      <p className="text-xs text-muted-foreground">Share</p>
                       <p className="font-data mt-1 text-lg font-semibold text-foreground">
-                        {formatScore(item.average_sentiment_score)}
+                        {formatPercent((item.event_count ?? 0) / Math.max(totalEvents, 1))}
                       </p>
                     </div>
                   </div>

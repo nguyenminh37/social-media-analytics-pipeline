@@ -31,18 +31,18 @@ class RawArchiverTests(unittest.TestCase):
         )
 
     def test_group_records_by_archive_partition_groups_by_hour(self) -> None:
-        record_a = self.make_record("raw_posts", 0, 1, 1716710400000)
-        record_b = self.make_record("raw_posts", 0, 2, 1716712200000)
+        record_a = self.make_record("raw_youtube_videos", 0, 1, 1716710400000)
+        record_b = self.make_record("raw_youtube_videos", 0, 2, 1716712200000)
 
         grouped = group_records_by_archive_partition([record_a, record_b])
 
         self.assertEqual(len(grouped), 1)
         archive_partition = next(iter(grouped))
-        self.assertEqual(archive_partition.topic, "raw_posts")
+        self.assertEqual(archive_partition.topic, "raw_youtube_videos")
         self.assertEqual(archive_partition.hour, build_archive_partition(record_a).hour)
 
     def test_write_archive_batch_writes_parquet_with_offsets_in_path(self) -> None:
-        record = self.make_record("raw_posts", 1, 42, 1716710400000)
+        record = self.make_record("raw_youtube_videos", 1, 42, 1716710400000)
         archive_partition = build_archive_partition(record)
         with tempfile.TemporaryDirectory() as temp_dir:
             target_path = write_archive_batch(

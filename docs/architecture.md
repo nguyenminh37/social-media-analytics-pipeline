@@ -1,62 +1,29 @@
-# Social Media Analytics - Architecture
+# Social Media Analytics - YouTube Architecture
 
-This document describes the Kappa architecture implemented in this project for real-time social media analytics. The repo now keeps the RSS pipeline separate from the YouTube pipeline.
+Tài liệu này mô tả kiến trúc Kappa hiện tại của dự án sau khi chỉ giữ lại YouTube pipeline.
 
-## Kappa Architecture Overview
-Unlike Lambda architecture which maintains both a batch and a streaming layer, the **Kappa architecture** treats everything as a stream. Data is ingested as streams, processed in real-time, and served to the user. If historical data needs to be reprocessed, it is simply replayed through the same stream processing engine.
-
-## Data Flow Diagram
+## Data Flow
 
 ```mermaid
 graph TD
-    A1[RSS Feeds] -->|Polling| C(Kafka: raw_posts)
-    A2[Historical Data] -->|Replay Script| C
-    A3[YouTube Data API] -->|Producer| Y1(Kafka: raw_youtube_*)
-    
-    C -->|Consume| D[Spark Structured Streaming]
+    Y0[YouTube Data API] -->|Producer| Y1(Kafka: raw_youtube_*)
+    Y1 -->|Archive| A[raw_archiver -> MinIO raw parquet]
     Y1 -->|Consume| Y2[YouTube Spark Streaming]
-    
-    subgraph Stream Processing [Stream Processor]
-    D --> E[Text Cleaning & Dedup]
-    E --> F[Sentiment Analysis UDF]
-    F --> G[Keyword Extraction]
-    end
-    
-    G -->|Publish| H(Kafka: processed_posts)
     Y2 -->|Publish| Y3(Kafka: silver_youtube_* / youtube_aggregated_metrics)
-    
-    H -->|Sink| I[(MongoDB)]
-    H -->|Sink| J[(Elasticsearch)]
-    H -->|Sink| K[(MinIO Parquet)]
-    Y3 -->|Sink| Y4[(YouTube MongoDB / Elasticsearch / MinIO)]
-    
-    J --> L[Kibana Dashboards]
-    J --> M[Grafana Dashboards]
+    Y2 -->|Sink| M[(MongoDB youtube_*)]
+    Y2 -->|Sink| E[(Elasticsearch youtube_*)]
+    Y2 -->|Sink| P[(MinIO youtube parquet)]
+    M --> S[serving_api]
+    E --> K[Kibana / Grafana]
 ```
 
-## Component Details
+## Thành phần
 
-### 1. Ingestion Layer (Collectors)
-- **RSS Collector**: Periodically fetches news from predefined RSS feeds (e.g., VnExpress, Tuoi Tre). Implements exponential backoff on failure.
-- **Message Broker**: **Apache Kafka** serves as the central nervous system. It buffers incoming `raw_posts` and decouples ingestion from processing.
-
-### 2. Stream Processing Layer
-- **Apache Spark**: Runs `stream_processor.py`. It consumes micro-batches from Kafka.
-- **Processing Steps**:
-  - Drops duplicate posts based on ID.
-  - Cleans HTML tags and normalizes whitespace.
-  - Passes text through `TextBlob` (via a Python UDF) to calculate Sentiment (Positive/Negative/Neutral).
-  - Extracts trending keywords for future aggregations.
-
-### 3. Storage Layer
-We utilize polyglot persistence to serve different query needs:
-- **Elasticsearch**: Optimized for full-text search and aggregations. Kibana and Grafana use this index (`processed_posts`) to render real-time dashboards.
-- **MongoDB**: Optimized for document retrieval and operational queries. Posts are stored with unique constraints on ID.
-- **MinIO**: S3-compatible object storage. Spark writes the processed streams as compressed `.parquet` files for long-term "cold" storage and future batch analytics/ML training.
-
-### 4. Serving & Visualization Layer
-- **Grafana**: Auto-provisioned with an Elasticsearch datasource and a default dashboard to show Post Volume and Sentiment Distribution.
-- **Kibana**: Provides deep search capabilities (Discover tab) to query specific content across all ingested news and posts.
-
-## Deployment Strategy
-Currently, the pipeline is designed to run locally using Docker Compose for infrastructure, and local Python environments for the collectors and Spark jobs. Kubernetes manifests (`k8s/`) are provided as a skeleton for future scalable deployments.
+- **Ingestion**: `collectors.youtube.producer` thu thập video trending, search results, comments và channel snapshots.
+- **Message Broker**: Kafka tách ingest khỏi processing bằng các raw topics riêng cho video, comment, channel.
+- **Stream Processing**: `spark_jobs/youtube/stream_processor.py` chuẩn hóa entity, gán sentiment, tính trending keywords và aggregated metrics.
+- **Storage**:
+  - MongoDB cho operational reads của `serving_api`
+  - Elasticsearch cho search và dashboard
+  - MinIO cho raw archive, parquet sinks và checkpoints
+- **Serving**: `serving_api` chỉ expose read APIs cho dashboard/frontend YouTube.

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
@@ -18,7 +19,9 @@ import urllib.error
 
 from config.kafka_config import KAFKA_BOOTSTRAP_SERVERS
 from config.mongo_config import MONGO_URI
-from config.elasticsearch_config import ELASTICSEARCH_HOST
+
+
+ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 from config.minio_config import MINIO_ENDPOINT
 
 def check_kafka() -> bool:

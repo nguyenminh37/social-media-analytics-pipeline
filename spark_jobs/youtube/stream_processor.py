@@ -29,7 +29,6 @@ from pyspark.sql.functions import (
     window,
 )
 
-from config.elasticsearch_config import ELASTICSEARCH_HOST
 from config.kafka_config import (
     KAFKA_BOOTSTRAP_SERVERS,
     PIPELINE_DLQ_TOPIC,
@@ -53,6 +52,9 @@ from config.storage_config import (
     YOUTUBE_SENTIMENT_COLLECTION,
     YOUTUBE_TRENDING_COLLECTION,
 )
+
+
+ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 from schemas.youtube.raw_schema import (
     RAW_YOUTUBE_CHANNEL_SPARK_SCHEMA,
     RAW_YOUTUBE_COMMENT_SPARK_SCHEMA,
@@ -207,6 +209,7 @@ def build_sentiment_metrics_df(content_df: DataFrame) -> DataFrame:
 def build_trending_keywords_df(content_df: DataFrame) -> DataFrame:
     text_df = content_df.select(
         col("event_time"),
+        col("entity_type"),
         explode(split(coalesce(col("title"), col("body_text")), r"\s+")).alias(
             "raw_keyword"
         ),
@@ -217,7 +220,11 @@ def build_trending_keywords_df(content_df: DataFrame) -> DataFrame:
             trim(regexp_replace(lower(col("raw_keyword")), r"^[^\w]+|[^\w]+$", "")),
         )
         .filter(length(col("keyword")) > 3)
-        .groupBy(window(col("event_time"), "1 hour", "15 minutes"), col("keyword"))
+        .groupBy(
+            window(col("event_time"), "1 hour", "15 minutes"),
+            col("entity_type"),
+            col("keyword"),
+        )
         .agg(count("*").alias("frequency"))
     )
 
@@ -234,6 +241,7 @@ def build_aggregated_metrics_sink_df(
         to_json(
             struct(
                 lit("youtube_trending").alias("metric_type"),
+                col("entity_type"),
                 col("keyword"),
                 col("frequency"),
                 col("window.start").alias("window_start"),
@@ -368,6 +376,7 @@ def write_metrics_to_mongo(batch_df: DataFrame, batch_id: int, collection: str) 
                     {
                         "window_start": record["window_start"],
                         "window_end": record["window_end"],
+                        "entity_type": record["entity_type"],
                         "keyword": record["keyword"],
                     },
                     {"$set": record},

@@ -3,18 +3,20 @@
 import { useEffect, useState, useTransition } from "react";
 
 import {
+  DEFAULT_PAGE_SIZE,
   fetchFreshness,
   fetchHealth,
   fetchSentimentMetrics,
   fetchTopVideos,
   fetchTrendingKeywords,
+  type DashboardFilter,
+  type FilterMode,
   type FreshnessResponse,
   type HealthResponse,
-  type LimitOption,
+  type HoursOption,
   type SentimentMetricsResponse,
   type TopVideosResponse,
   type TrendingKeywordsResponse,
-  type WindowOption,
 } from "@/lib/api";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
@@ -29,6 +31,16 @@ interface RemoteSection<T> {
   error: string | null;
 }
 
+function getDefaultDateRange() {
+  const toDate = new Date();
+  const fromDate = new Date(toDate.getTime() - 6 * 24 * 60 * 60 * 1000);
+
+  return {
+    dateFrom: fromDate.toISOString().slice(0, 10),
+    dateTo: toDate.toISOString().slice(0, 10),
+  };
+}
+
 const EMPTY_HEALTH: HealthResponse = {
   status: "unknown",
   error: null,
@@ -38,25 +50,70 @@ const EMPTY_HEALTH: HealthResponse = {
 const EMPTY_FRESHNESS: FreshnessResponse = {};
 
 const EMPTY_TOP_VIDEOS: TopVideosResponse = {
-  window_minutes: 0,
-  limit: 0,
+  ranking_mode: null,
+  page: 1,
+  page_size: DEFAULT_PAGE_SIZE,
+  total_items: 0,
+  total_pages: 0,
+  has_previous_page: false,
+  has_next_page: false,
+  filter_mode: null,
+  window_hours: null,
+  date_from: null,
+  date_to: null,
+  from_time: null,
+  to_time: null,
+  latest_event_time: null,
   items: [],
 };
 
 const EMPTY_SENTIMENT: SentimentMetricsResponse = {
-  window_minutes: 0,
+  page: 1,
+  page_size: DEFAULT_PAGE_SIZE,
+  total_items: 0,
+  total_pages: 0,
+  has_previous_page: false,
+  has_next_page: false,
+  filter_mode: null,
+  window_hours: null,
+  date_from: null,
+  date_to: null,
+  from_time: null,
+  to_time: null,
+  latest_window_end: null,
+  total_events: 0,
   items: [],
 };
 
 const EMPTY_TRENDING: TrendingKeywordsResponse = {
-  window_minutes: 0,
-  limit: 0,
+  page: 1,
+  page_size: DEFAULT_PAGE_SIZE,
+  total_items: 0,
+  total_pages: 0,
+  has_previous_page: false,
+  has_next_page: false,
+  filter_mode: null,
+  window_hours: null,
+  date_from: null,
+  date_to: null,
+  from_time: null,
+  to_time: null,
+  window_start: null,
+  window_end: null,
   items: [],
 };
 
 export function DashboardShell() {
-  const [windowMinutes, setWindowMinutes] = useState<WindowOption>(180);
-  const [limit, setLimit] = useState<LimitOption>(10);
+  const defaultDateRange = getDefaultDateRange();
+  const [filter, setFilter] = useState<DashboardFilter>({
+    filterMode: "hours",
+    windowHours: 24,
+    dateFrom: defaultDateRange.dateFrom,
+    dateTo: defaultDateRange.dateTo,
+  });
+  const [topVideosPage, setTopVideosPage] = useState(1);
+  const [sentimentPage, setSentimentPage] = useState(1);
+  const [trendingPage, setTrendingPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, startTransition] = useTransition();
@@ -99,35 +156,20 @@ export function DashboardShell() {
       ] = await Promise.all([
         fetchHealth(),
         fetchFreshness(),
-        fetchTopVideos(windowMinutes, limit),
-        fetchSentimentMetrics(windowMinutes),
-        fetchTrendingKeywords(windowMinutes, limit),
+        fetchTopVideos(filter, topVideosPage),
+        fetchSentimentMetrics(filter, sentimentPage),
+        fetchTrendingKeywords(filter, trendingPage),
       ]);
 
       if (!active) {
         return;
       }
 
-      setHealth({
-        data: healthResult.data,
-        error: healthResult.error,
-      });
-      setFreshness({
-        data: freshnessResult.data,
-        error: freshnessResult.error,
-      });
-      setTopVideos({
-        data: topVideosResult.data,
-        error: topVideosResult.error,
-      });
-      setSentiment({
-        data: sentimentResult.data,
-        error: sentimentResult.error,
-      });
-      setTrending({
-        data: trendingResult.data,
-        error: trendingResult.error,
-      });
+      setHealth({ data: healthResult.data, error: healthResult.error });
+      setFreshness({ data: freshnessResult.data, error: freshnessResult.error });
+      setTopVideos({ data: topVideosResult.data, error: topVideosResult.error });
+      setSentiment({ data: sentimentResult.data, error: sentimentResult.error });
+      setTrending({ data: trendingResult.data, error: trendingResult.error });
       setIsInitialLoading(false);
     }
 
@@ -136,7 +178,13 @@ export function DashboardShell() {
     return () => {
       active = false;
     };
-  }, [limit, refreshKey, windowMinutes]);
+  }, [filter, refreshKey, sentimentPage, topVideosPage, trendingPage]);
+
+  function resetPages() {
+    setTopVideosPage(1);
+    setSentimentPage(1);
+    setTrendingPage(1);
+  }
 
   function triggerRefresh() {
     startTransition(() => {
@@ -144,15 +192,31 @@ export function DashboardShell() {
     });
   }
 
-  function updateWindow(value: WindowOption) {
+  function updateFilterMode(value: FilterMode) {
     startTransition(() => {
-      setWindowMinutes(value);
+      setFilter((current) => ({ ...current, filterMode: value }));
+      resetPages();
     });
   }
 
-  function updateLimit(value: LimitOption) {
+  function updateWindowHours(value: HoursOption) {
     startTransition(() => {
-      setLimit(value);
+      setFilter((current) => ({ ...current, windowHours: value }));
+      resetPages();
+    });
+  }
+
+  function updateDateFrom(value: string) {
+    startTransition(() => {
+      setFilter((current) => ({ ...current, dateFrom: value }));
+      resetPages();
+    });
+  }
+
+  function updateDateTo(value: string) {
+    startTransition(() => {
+      setFilter((current) => ({ ...current, dateTo: value }));
+      resetPages();
     });
   }
 
@@ -169,12 +233,13 @@ export function DashboardShell() {
         />
 
         <DashboardFilters
+          filter={filter}
           isRefreshing={isRefreshing}
-          limit={limit}
-          onLimitChange={updateLimit}
+          onDateFromChange={updateDateFrom}
+          onDateToChange={updateDateTo}
+          onFilterModeChange={updateFilterMode}
           onRefresh={triggerRefresh}
-          onWindowChange={updateWindow}
-          windowMinutes={windowMinutes}
+          onWindowHoursChange={updateWindowHours}
         />
 
         <section className="grid gap-6">
@@ -188,17 +253,23 @@ export function DashboardShell() {
             data={topVideos.data}
             error={topVideos.error}
             isLoading={isInitialLoading}
+            isRefreshing={isRefreshing}
+            onPageChange={setTopVideosPage}
           />
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <SentimentMetricsPanel
               data={sentiment.data}
               error={sentiment.error}
               isLoading={isInitialLoading}
+              isRefreshing={isRefreshing}
+              onPageChange={setSentimentPage}
             />
             <TrendingKeywordsPanel
               data={trending.data}
               error={trending.error}
               isLoading={isInitialLoading}
+              isRefreshing={isRefreshing}
+              onPageChange={setTrendingPage}
             />
           </div>
         </section>
