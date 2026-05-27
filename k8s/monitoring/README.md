@@ -9,5 +9,5 @@ Repo này chưa bundle full Prometheus stack vì mục tiêu là demo/submission
 - Kafka UI cho topic flow
 - Spark UI cho micro-batch/execution
 - MinIO Console cho Parquet/checkpoint
-- Kibana cho search/dashboard
+- Kibana cho search/dashboard. Dashboard demo chính là `Vietnam Public Trend Intelligence`, được seed bằng `scripts/init_kibana_saved_objects.py`.
 - script smoke-check local cho xác minh stack
