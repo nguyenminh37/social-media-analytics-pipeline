@@ -19,4 +19,11 @@ spec:
           envFrom:
             - configMapRef:
                 name: pipeline-runtime-config
+          env:
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: GEMINI_API_KEY
+                  optional: true
           command: ["python", "-m", "ai_insights.sentiment_enricher"]

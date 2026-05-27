@@ -48,4 +48,4 @@ data:
   GEMINI_MODEL: gemini-3.5-flash
   AI_BRIEFING_INTERVAL_MINUTES: "60"
   AI_BRIEFING_LOOKBACK_HOURS: "6"
-  SENTIMENT_MODEL_NAME: tabularisai/multilingual-sentiment-analysis
+  SENTIMENT_MODEL_NAME: gemini-3.5-flash
