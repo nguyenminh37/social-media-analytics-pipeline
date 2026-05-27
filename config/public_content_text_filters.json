@@ -1,5 +1,13 @@
 {
-  "stopwords": [
+  "public_stopwords": {
+    "name": "vietnamese-stopwords",
+    "source_url": "https://github.com/stopwords/vietnamese-stopwords",
+    "source_commit": "a453d389e1b52e20748ca83ddd8b0faebb04f5aa",
+    "license": "MIT",
+    "path": "external/vietnamese-stopwords.txt",
+    "match_mode": "accent_sensitive"
+  },
+  "supplemental_stopwords": [
     "ai",
     "an",
     "anh",
@@ -96,6 +104,26 @@
     "www",
     "xem",
     "youtube"
+  ],
+  "protected_phrases": [
+    "chung khoan",
+    "gia vang",
+    "nang nong",
+    "thai lan",
+    "vac xin",
+    "vac xin ebola"
+  ],
+  "phrase_context_terms": [
+    "chinh",
+    "cua",
+    "den",
+    "o",
+    "tai",
+    "tham",
+    "thuc",
+    "tong",
+    "tu",
+    "ve"
   ],
   "weak_single_terms": [
     "bat",

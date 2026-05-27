@@ -1,6 +1,6 @@
 import os
 
-from config.env import PROJECT_ROOT  # noqa: F401
+from config.env import PROJECT_ROOT
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -10,3 +10,8 @@ AI_BRIEFING_LOOKBACK_HOURS = int(os.getenv("AI_BRIEFING_LOOKBACK_HOURS", "6"))
 AI_BRIEFING_TOPICS_LIMIT = int(os.getenv("AI_BRIEFING_TOPICS_LIMIT", "10"))
 SENTIMENT_MODEL_NAME = os.getenv("SENTIMENT_MODEL_NAME", GEMINI_MODEL)
 SENTIMENT_BATCH_LIMIT = int(os.getenv("SENTIMENT_BATCH_LIMIT", "8"))
+SENTIMENT_PROVIDER = os.getenv("SENTIMENT_PROVIDER", "lexicon").lower()
+SENTIMENT_LEXICON_PATH = os.getenv(
+    "SENTIMENT_LEXICON_PATH",
+    str(PROJECT_ROOT / "config" / "external" / "vnemolex_sentiment.json"),
+)

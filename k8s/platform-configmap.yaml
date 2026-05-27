@@ -51,5 +51,7 @@ data:
   AI_BRIEFING_INTERVAL_MINUTES: "60"
   AI_BRIEFING_LOOKBACK_HOURS: "6"
   SENTIMENT_MODEL_NAME: gemini-3.5-flash
+  SENTIMENT_PROVIDER: lexicon
+  SENTIMENT_LEXICON_PATH: /app/config/external/vnemolex_sentiment.json
   SENTIMENT_BATCH_LIMIT: "8"
   ANALYTICS_API_BASE_URL: http://social-media-serving-api:8081

@@ -26,6 +26,25 @@ class TextFeatureTests(unittest.TestCase):
         self.assertNotIn("moi", keywords)
         self.assertNotIn("nhat", keywords)
 
+    def test_public_stopwords_do_not_break_accent_folded_topics(self):
+        keywords = extract_keywords(
+            "Vâng, giá vàng tăng mạnh trong lúc Thái Lan mở rộng hợp tác"
+        )
+
+        self.assertIn("gia vang", keywords)
+        self.assertIn("thai lan", keywords)
+        self.assertNotIn("vang", keywords)
+
+    def test_context_phrases_are_canonicalized_to_protected_topics(self):
+        keywords = extract_keywords(
+            "Tong Bi thu tham chinh thuc tai Thai Lan. Thai Lan tong hop tin moi."
+        )
+
+        self.assertIn("thai lan", keywords)
+        self.assertNotIn("tai thai", keywords)
+        self.assertNotIn("tai thai lan", keywords)
+        self.assertNotIn("thai lan tong", keywords)
+
 
 if __name__ == "__main__":
     unittest.main()
