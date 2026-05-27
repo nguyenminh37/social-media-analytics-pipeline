@@ -32,4 +32,4 @@ spec:
             - /bin/bash
             - -lc
             - |
-              spark-submit /opt/social-media-analytics/spark_jobs/youtube/stream_processor.py
+              spark-submit /opt/social-media-analytics/spark_jobs/public_content/stream_processor.py

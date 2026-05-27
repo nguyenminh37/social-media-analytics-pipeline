@@ -1,0 +1,14 @@
+import os
+
+from config.env import PROJECT_ROOT  # noqa: F401
+
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+AI_BRIEFING_INTERVAL_MINUTES = int(os.getenv("AI_BRIEFING_INTERVAL_MINUTES", "60"))
+AI_BRIEFING_LOOKBACK_HOURS = int(os.getenv("AI_BRIEFING_LOOKBACK_HOURS", "6"))
+AI_BRIEFING_TOPICS_LIMIT = int(os.getenv("AI_BRIEFING_TOPICS_LIMIT", "10"))
+SENTIMENT_MODEL_NAME = os.getenv(
+    "SENTIMENT_MODEL_NAME", "tabularisai/multilingual-sentiment-analysis"
+)
+SENTIMENT_BATCH_LIMIT = int(os.getenv("SENTIMENT_BATCH_LIMIT", "200"))

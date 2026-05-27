@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: social-media-raw-archiver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: social-media-raw-archiver
+  template:
+    metadata:
+      labels:
+        app: social-media-raw-archiver
+    spec:
+      containers:
+        - name: archiver
+          image: social-media-collector:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: pipeline-runtime-config
+          command: ["python", "-m", "consumers.raw_archiver"]

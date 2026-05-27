@@ -34,3 +34,36 @@ YOUTUBE_CHANNEL_SNAPSHOTS_PATH = os.getenv(
 YOUTUBE_AGGREGATES_PATH = os.getenv(
     "MINIO_YOUTUBE_AGGREGATES_PATH", "youtube/aggregates"
 )
+
+PUBLIC_CONTENT_EVENTS_COLLECTION = os.getenv(
+    "MONGO_PUBLIC_CONTENT_EVENTS_COLLECTION", "public_content_events"
+)
+PUBLIC_TREND_METRICS_COLLECTION = os.getenv(
+    "MONGO_PUBLIC_TREND_METRICS_COLLECTION", "public_trend_metrics"
+)
+PUBLIC_TREND_ALERTS_COLLECTION = os.getenv(
+    "MONGO_PUBLIC_TREND_ALERTS_COLLECTION", "public_trend_alerts"
+)
+AI_TREND_BRIEFINGS_COLLECTION = os.getenv(
+    "MONGO_AI_TREND_BRIEFINGS_COLLECTION", "ai_trend_briefings"
+)
+
+PUBLIC_CONTENT_EVENTS_INDEX = os.getenv(
+    "ELASTICSEARCH_PUBLIC_CONTENT_EVENTS_INDEX", "public_content_events"
+)
+PUBLIC_TREND_METRICS_INDEX = os.getenv(
+    "ELASTICSEARCH_PUBLIC_TREND_METRICS_INDEX", "public_trend_metrics"
+)
+PUBLIC_TREND_ALERTS_INDEX = os.getenv(
+    "ELASTICSEARCH_PUBLIC_TREND_ALERTS_INDEX", "public_trend_alerts"
+)
+AI_TREND_BRIEFINGS_INDEX = os.getenv(
+    "ELASTICSEARCH_AI_TREND_BRIEFINGS_INDEX", "ai_trend_briefings"
+)
+
+PUBLIC_CONTENT_EVENTS_PATH = os.getenv(
+    "MINIO_PUBLIC_CONTENT_EVENTS_PATH", "public_content/content_events"
+)
+PUBLIC_TREND_METRICS_PATH = os.getenv(
+    "MINIO_PUBLIC_TREND_METRICS_PATH", "public_content/trend_metrics"
+)

@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: social-media-sentiment-enricher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: social-media-sentiment-enricher
+  template:
+    metadata:
+      labels:
+        app: social-media-sentiment-enricher
+    spec:
+      containers:
+        - name: sentiment-enricher
+          image: social-media-collector:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: pipeline-runtime-config
+          command: ["python", "-m", "ai_insights.sentiment_enricher"]
