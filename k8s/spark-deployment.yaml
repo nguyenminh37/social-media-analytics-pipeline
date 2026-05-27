@@ -14,4 +14,22 @@ spec:
     spec:
       containers:
         - name: spark
-          image: bitnami/spark:3.5
+          image: social-media-spark:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: pipeline-runtime-config
+          env:
+            - name: PYSPARK_PYTHON
+              value: python
+            - name: PYTHONPATH
+              value: /opt/social-media-analytics
+            - name: RESET_CHECKPOINT_ON_START
+              value: "false"
+            - name: SPARK_RESOLVE_PACKAGES
+              value: "false"
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              spark-submit /opt/social-media-analytics/spark_jobs/youtube/stream_processor.py

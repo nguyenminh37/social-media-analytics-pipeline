@@ -53,14 +53,18 @@ def normalize_mongo_records(
 def create_spark_session(app_name: str):
     from pyspark.sql import SparkSession
 
-    return (
+    builder = (
         SparkSession.builder.appName(app_name)
         .config("spark.streaming.stopGracefullyOnShutdown", "true")
         .config("spark.sql.shuffle.partitions", "2")
-        .config(
+    )
+    if os.getenv("SPARK_RESOLVE_PACKAGES", "true").lower() == "true":
+        builder = builder.config(
             "spark.jars.packages",
             ",".join([SPARK_KAFKA_PACKAGE, SPARK_ES_PACKAGE, SPARK_AWS_PACKAGE]),
         )
+    return (
+        builder
         .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT)
         .config("spark.hadoop.fs.s3a.access.key", MINIO_ACCESS_KEY)
         .config("spark.hadoop.fs.s3a.secret.key", MINIO_SECRET_KEY)
