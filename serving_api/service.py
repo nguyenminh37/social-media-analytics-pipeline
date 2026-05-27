@@ -212,9 +212,6 @@ class YouTubeAnalyticsService:
             "items": self._serialize_datetimes(result.get("items", [])),
         }
 
-    def public_ai_briefing(self) -> dict:
-        return self._serialize_datetimes(self._repository.fetch_latest_ai_briefing())
-
     def _pagination_payload(
         self,
         *,

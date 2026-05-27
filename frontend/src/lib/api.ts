@@ -392,21 +392,6 @@ export interface PublicTrendAlert {
   representative_titles: string[];
 }
 
-export interface AiBriefingResponse {
-  briefing_id?: string | null;
-  created_at?: string | null;
-  model?: string | null;
-  input_topic_count?: number | null;
-  briefing?: {
-    headline?: string | null;
-    summary?: string | null;
-    key_insights?: string[];
-    watch_topics?: string[];
-    anomalies?: string[];
-    recommended_filters?: Record<string, unknown> | null;
-  } | null;
-}
-
 export interface PublicOverviewResponse {
   checked_at?: string | null;
   content_count: number;
@@ -414,7 +399,6 @@ export interface PublicOverviewResponse {
   trend_alert_count: number;
   latest_content?: PublicContentEvent | null;
   latest_alert?: PublicTrendAlert | null;
-  latest_briefing?: AiBriefingResponse | null;
   platform_counts: PublicCountItem[];
   sentiment_counts: PublicCountItem[];
 }
@@ -463,27 +447,6 @@ function normalizePublicTrendAlert(value: unknown): PublicTrendAlert {
   };
 }
 
-function normalizeAiBriefingResponse(value: unknown): AiBriefingResponse {
-  const record = asObject(value);
-  const briefing = asObject(record.briefing);
-  return {
-    briefing_id: asString(record.briefing_id),
-    created_at: asString(record.created_at),
-    model: asString(record.model),
-    input_topic_count: asNumber(record.input_topic_count),
-    briefing: record.briefing
-      ? {
-          headline: asString(briefing.headline),
-          summary: asString(briefing.summary),
-          key_insights: asStringArray(briefing.key_insights),
-          watch_topics: asStringArray(briefing.watch_topics),
-          anomalies: asStringArray(briefing.anomalies),
-          recommended_filters: asObject(briefing.recommended_filters),
-        }
-      : null,
-  };
-}
-
 export function normalizePublicOverviewResponse(
   value: unknown,
 ): PublicOverviewResponse {
@@ -498,9 +461,6 @@ export function normalizePublicOverviewResponse(
       : null,
     latest_alert: record.latest_alert
       ? normalizePublicTrendAlert(record.latest_alert)
-      : null,
-    latest_briefing: record.latest_briefing
-      ? normalizeAiBriefingResponse(record.latest_briefing)
       : null,
     platform_counts: asArray(record.platform_counts).map((item) => {
       const count = asObject(item);
@@ -568,13 +528,5 @@ export function fetchPublicContentEvents(filter: DashboardFilter, page: number) 
       page_size: DEFAULT_PAGE_SIZE,
     },
     normalizePublicContentEventsResponse,
-  );
-}
-
-export function fetchPublicAiBriefing() {
-  return requestProxy(
-    "/api/public/ai-briefing",
-    {},
-    normalizeAiBriefingResponse,
   );
 }

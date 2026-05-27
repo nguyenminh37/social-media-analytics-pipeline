@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 
 from config.mongo_config import MONGO_DATABASE, MONGO_URI
 from config.storage_config import (
-    AI_TREND_BRIEFINGS_COLLECTION,
     PUBLIC_CONTENT_EVENTS_COLLECTION,
     PUBLIC_TREND_ALERTS_COLLECTION,
     YOUTUBE_CONTENT_EVENTS_COLLECTION,
@@ -345,7 +344,6 @@ class YouTubeAnalyticsRepository:
             database = client[self._database]
             content = database[PUBLIC_CONTENT_EVENTS_COLLECTION]
             alerts = database[PUBLIC_TREND_ALERTS_COLLECTION]
-            briefings = database[AI_TREND_BRIEFINGS_COLLECTION]
             content_filter = {"event_time": {"$gte": from_time, "$lt": to_time}}
             alert_filter = {"window_end": {"$gte": from_time, "$lt": to_time}}
             latest_content = content.find_one(
@@ -357,11 +355,6 @@ class YouTubeAnalyticsRepository:
                 alert_filter,
                 {"_id": 0},
                 sort=[("content_count", -1), ("trend_score", -1), ("window_end", -1)],
-            )
-            latest_briefing = briefings.find_one(
-                {},
-                {"_id": 0},
-                sort=[("created_at", -1)],
             )
             platform_counts = list(
                 content.aggregate(
@@ -392,7 +385,6 @@ class YouTubeAnalyticsRepository:
                 "trend_alert_count": alerts.count_documents(alert_filter),
                 "latest_content": latest_content,
                 "latest_alert": latest_alert,
-                "latest_briefing": latest_briefing,
                 "platform_counts": platform_counts,
                 "sentiment_counts": sentiment_counts,
             }
@@ -447,14 +439,3 @@ class YouTubeAnalyticsRepository:
                 .limit(page_size)
             )
         return {"items": items, "total_items": total_items}
-
-    def fetch_latest_ai_briefing(self) -> dict:
-        from pymongo import MongoClient
-
-        with MongoClient(self._mongo_uri) as client:
-            briefing = client[self._database][AI_TREND_BRIEFINGS_COLLECTION].find_one(
-                {},
-                {"_id": 0},
-                sort=[("created_at", -1)],
-            )
-        return briefing or {}

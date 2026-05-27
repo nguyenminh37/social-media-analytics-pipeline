@@ -3,7 +3,7 @@ import unittest
 from ai_insights.hourly_trend_summarizer import build_prompt, build_template_briefing
 
 
-class AiBriefingTests(unittest.TestCase):
+class RuleBasedBriefingTests(unittest.TestCase):
     def test_build_template_briefing_uses_top_trend(self):
         context = {
             "trends": [{"keyword": "gia vang", "content_count": 7}],

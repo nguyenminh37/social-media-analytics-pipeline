@@ -16,7 +16,6 @@ resources:
   - news-rss-deployment.yaml
   - youtube-rss-deployment.yaml
   - raw-archiver-deployment.yaml
-  - ai-briefing-deployment.yaml
   - sentiment-enricher-deployment.yaml
   - serving-api-deployment.yaml
   - frontend-deployment.yaml

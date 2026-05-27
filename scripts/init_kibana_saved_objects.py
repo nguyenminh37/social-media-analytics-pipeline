@@ -13,7 +13,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
-DEFAULT_KIBANA_URL = "http://127.0.0.1:15601"
+DEFAULT_KIBANA_URL = "http://108.61.246.243:15601"
 KIBANA_VERSION = "8.16.0"
 
 DATA_VIEWS = {
@@ -32,12 +32,12 @@ DATA_VIEWS = {
         "name": "Public trend alerts",
         "timeFieldName": "window_end",
     },
-    "sma-ai-trend-briefings": {
-        "title": "ai_trend_briefings",
-        "name": "AI trend briefings",
-        "timeFieldName": "created_at",
-    },
 }
+
+LEGACY_OBJECTS = [
+    ("search", "sma-latest-ai-briefings"),
+    ("index-pattern", "sma-ai-trend-briefings"),
+]
 
 DASHBOARD_ID = "sma-vietnam-public-trend-intelligence"
 
@@ -104,6 +104,21 @@ def saved_object(
         f"/api/saved_objects/{encoded_type}/{encoded_id}?overwrite=true",
         {"attributes": attributes, "references": references or []},
     )
+
+
+def delete_saved_object(kibana_url: str, object_type: str, object_id: str) -> None:
+    encoded_type = quote(object_type, safe="")
+    encoded_id = quote(object_id, safe="")
+    try:
+        request_json(kibana_url, "DELETE", f"/api/saved_objects/{encoded_type}/{encoded_id}")
+    except RuntimeError as exc:
+        if "HTTP 404" not in str(exc):
+            raise
+
+
+def cleanup_legacy_objects(kibana_url: str) -> None:
+    for object_type, object_id in LEGACY_OBJECTS:
+        delete_saved_object(kibana_url, object_type, object_id)
 
 
 def search_source(index_ref_name: str | None = None) -> str:
@@ -456,21 +471,6 @@ def seed_searches(kibana_url: str) -> None:
         ],
         "event_time",
     )
-    create_saved_search(
-        kibana_url,
-        "sma-latest-ai-briefings",
-        "Latest AI trend briefings",
-        "sma-ai-trend-briefings",
-        [
-            "created_at",
-            "model",
-            "input_topic_count",
-            "briefing.headline",
-            "briefing.summary",
-            "briefing.key_insights",
-        ],
-        "created_at",
-    )
 
 
 def dashboard_panel(
@@ -501,8 +501,7 @@ def seed_dashboard(kibana_url: str) -> None:
         dashboard_panel("visualization", "sma-source-distribution", "panel_3", "3", 0, 24, 12, 12),
         dashboard_panel("visualization", "sma-alert-topics-by-score", "panel_4", "4", 12, 24, 12, 12),
         dashboard_panel("search", "sma-latest-trend-alerts", "panel_5", "5", 24, 16, 24, 20),
-        dashboard_panel("search", "sma-representative-content", "panel_6", "6", 0, 36, 24, 20),
-        dashboard_panel("search", "sma-latest-ai-briefings", "panel_7", "7", 24, 36, 24, 20),
+        dashboard_panel("search", "sma-representative-content", "panel_6", "6", 0, 36, 48, 20),
     ]
     references = [
         {"name": "panel_0", "type": "visualization", "id": "sma-content-volume-over-time"},
@@ -512,7 +511,6 @@ def seed_dashboard(kibana_url: str) -> None:
         {"name": "panel_4", "type": "visualization", "id": "sma-alert-topics-by-score"},
         {"name": "panel_5", "type": "search", "id": "sma-latest-trend-alerts"},
         {"name": "panel_6", "type": "search", "id": "sma-representative-content"},
-        {"name": "panel_7", "type": "search", "id": "sma-latest-ai-briefings"},
     ]
     saved_object(
         kibana_url,
@@ -551,6 +549,7 @@ def seed_dashboard(kibana_url: str) -> None:
 
 
 def seed_all(kibana_url: str) -> None:
+    cleanup_legacy_objects(kibana_url)
     seed_data_views(kibana_url)
     seed_visualizations(kibana_url)
     seed_searches(kibana_url)

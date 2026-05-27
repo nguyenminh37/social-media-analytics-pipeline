@@ -5,11 +5,9 @@ import type { ReactNode } from "react";
 
 import {
   DEFAULT_PAGE_SIZE,
-  fetchPublicAiBriefing,
   fetchPublicContentEvents,
   fetchPublicOverview,
   fetchPublicTrendAlerts,
-  type AiBriefingResponse,
   type DashboardFilter,
   type FilterMode,
   type HoursOption,
@@ -39,7 +37,6 @@ const EMPTY_OVERVIEW: PublicOverviewResponse = {
   trend_alert_count: 0,
   latest_content: null,
   latest_alert: null,
-  latest_briefing: null,
   platform_counts: [],
   sentiment_counts: [],
 };
@@ -63,8 +60,6 @@ const EMPTY_CONTENT: PublicContentEventsResponse = {
   has_next_page: false,
   items: [],
 };
-
-const EMPTY_BRIEFING: AiBriefingResponse = {};
 
 function getDefaultDateRange() {
   const toDate = new Date();
@@ -164,22 +159,16 @@ export function DashboardShell() {
     data: EMPTY_CONTENT,
     error: null,
   });
-  const [briefing, setBriefing] = useState<RemoteSection<AiBriefingResponse>>({
-    data: EMPTY_BRIEFING,
-    error: null,
-  });
 
   useEffect(() => {
     let active = true;
 
     async function loadDashboard() {
-      const [overviewResult, alertResult, contentResult, briefingResult] =
-        await Promise.all([
-          fetchPublicOverview(filter),
-          fetchPublicTrendAlerts(filter, alertPage),
-          fetchPublicContentEvents(filter, contentPage),
-          fetchPublicAiBriefing(),
-        ]);
+      const [overviewResult, alertResult, contentResult] = await Promise.all([
+        fetchPublicOverview(filter),
+        fetchPublicTrendAlerts(filter, alertPage),
+        fetchPublicContentEvents(filter, contentPage),
+      ]);
 
       if (!active) {
         return;
@@ -188,7 +177,6 @@ export function DashboardShell() {
       setOverview({ data: overviewResult.data, error: overviewResult.error });
       setAlerts({ data: alertResult.data, error: alertResult.error });
       setContent({ data: contentResult.data, error: contentResult.error });
-      setBriefing({ data: briefingResult.data, error: briefingResult.error });
       setIsInitialLoading(false);
     }
 
@@ -232,8 +220,6 @@ export function DashboardShell() {
     });
   }
 
-  const aiBriefing = briefing.data.briefing ?? overview.data.latest_briefing?.briefing;
-
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
@@ -247,9 +233,6 @@ export function DashboardShell() {
                 ? "Loading data"
                 : `Updated ${formatDateTime(overview.data.checked_at)}`}
             </div>
-          </div>
-          <div className="text-sm text-slate-600">
-            AI: {briefing.data.model ?? overview.data.latest_briefing?.model ?? "-"}
           </div>
         </header>
 
@@ -289,26 +272,6 @@ export function DashboardShell() {
             subvalue={overview.data.latest_content?.title ?? null}
           />
         </section>
-
-        <Panel title="AI briefing" error={briefing.error}>
-          <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
-            <div>
-              <div className="text-lg font-semibold">
-                {aiBriefing?.headline ?? "No briefing yet"}
-              </div>
-              <div className="mt-2 text-sm leading-6 text-slate-700">
-                {aiBriefing?.summary ?? "-"}
-              </div>
-            </div>
-            <div className="grid gap-2 text-sm text-slate-700">
-              {(aiBriefing?.key_insights ?? []).slice(0, 5).map((item) => (
-                <div key={item} className="rounded-md bg-slate-100 px-3 py-2">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </Panel>
 
         <Panel title="Trend alerts" error={alerts.error}>
           <Table>

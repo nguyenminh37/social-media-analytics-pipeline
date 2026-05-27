@@ -48,7 +48,7 @@ kubectl port-forward --address 0.0.0.0 -n "$NS" svc/social-media-elasticsearch 9
 if [[ "$KIBANA_SEED_DASHBOARD" == "true" ]]; then
   if command -v python3 >/dev/null 2>&1; then
     if ! python3 "$REPO_ROOT/scripts/init_kibana_saved_objects.py" \
-      --kibana-url "http://localhost:${KIBANA_LOCAL_PORT}" \
+      --kibana-url "http://${PUBLIC_IP}:${KIBANA_LOCAL_PORT}" \
       --display-url "http://${PUBLIC_IP}:${KIBANA_LOCAL_PORT}" \
       --wait-timeout 90; then
       printf 'warning: failed to seed Kibana dashboard; port-forwards are still running\n' >&2

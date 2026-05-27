@@ -11,6 +11,7 @@ from elasticsearch import Elasticsearch
 from pymongo import DESCENDING, MongoClient
 
 from config.ai_config import (
+    AI_BRIEFING_ENABLED,
     AI_BRIEFING_INTERVAL_MINUTES,
     AI_BRIEFING_LOOKBACK_HOURS,
     AI_BRIEFING_TOPICS_LIMIT,
@@ -155,6 +156,8 @@ def build_prompt(context: dict) -> str:
 def call_gemini(prompt: str) -> dict:
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is required")
+    if not GEMINI_MODEL:
+        raise RuntimeError("GEMINI_MODEL is required")
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
         f"{urllib.parse.quote(GEMINI_MODEL)}:generateContent"
@@ -186,7 +189,7 @@ def call_gemini(prompt: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        return {"headline": "AI briefing parse failed", "summary": text, "key_insights": []}
+        return {"headline": "Briefing parse failed", "summary": text, "key_insights": []}
 
 
 def build_template_briefing(context: dict) -> dict:
@@ -233,7 +236,7 @@ def persist_briefing(context: dict, briefing: dict, model_name: str | None = Non
     document = {
         "briefing_id": f"briefing:{now.strftime('%Y%m%d%H%M%S')}",
         "created_at": now,
-        "model": model_name or (GEMINI_MODEL if GEMINI_API_KEY else "rule_based_fallback"),
+        "model": model_name or "rule_based_fallback",
         "window_start": context.get("window_start"),
         "window_end": context.get("window_end"),
         "input_topic_count": len(context.get("trends", [])),
@@ -253,25 +256,25 @@ def persist_briefing(context: dict, briefing: dict, model_name: str | None = Non
             document=_json_ready(document),
         )
     except Exception as exc:
-        log.warning("Skipping Elasticsearch AI briefing sink: %s", exc)
+        log.warning("Skipping Elasticsearch trend briefing sink: %s", exc)
     return document
 
 
 def run_once() -> dict:
     context = fetch_briefing_context()
-    if GEMINI_API_KEY and context.get("trends"):
+    if AI_BRIEFING_ENABLED and GEMINI_API_KEY and GEMINI_MODEL and context.get("trends"):
         try:
             briefing = call_gemini(build_prompt(context))
             model_name = GEMINI_MODEL
         except Exception as exc:
-            log.warning("Falling back to template AI briefing: %s", exc)
+            log.warning("Falling back to template trend briefing: %s", exc)
             briefing = build_template_briefing(context)
             model_name = "rule_based_fallback"
     else:
         briefing = build_template_briefing(context)
         model_name = "rule_based_fallback"
     document = persist_briefing(context, briefing, model_name)
-    log.info("Created AI trend briefing %s", document["briefing_id"])
+    log.info("Created trend briefing %s", document["briefing_id"])
     return _json_ready(document)
 
 
@@ -280,7 +283,7 @@ def main() -> None:
         try:
             run_once()
         except Exception as exc:
-            log.exception("AI briefing job failed: %s", exc)
+            log.exception("Trend briefing job failed: %s", exc)
         time.sleep(AI_BRIEFING_INTERVAL_MINUTES * 60)
 
 

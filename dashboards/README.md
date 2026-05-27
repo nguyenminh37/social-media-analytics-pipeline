@@ -4,7 +4,7 @@ Dashboard cho phần demo dữ liệu thật được tạo bằng lệnh nội 
 
 ```bash
 python3 scripts/init_kibana_saved_objects.py \
-  --kibana-url http://localhost:15601 \
+  --kibana-url http://108.61.246.243:15601 \
   --display-url http://108.61.246.243:15601
 ```
 
@@ -19,8 +19,7 @@ Dashboard chính:
 Các object được seed:
 
 - Data views: `public_content_events`, `public_trend_metrics`,
-  `public_trend_alerts`, `ai_trend_briefings`
+  `public_trend_alerts`
 - Vega charts: content volume, top trending topics, trend mention timeline,
   source distribution, alert topics by score
-- Discover tables: latest trend alerts, representative content events,
-  latest AI trend briefings
+- Discover tables: latest trend alerts, representative content events

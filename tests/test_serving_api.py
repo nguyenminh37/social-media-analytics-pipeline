@@ -59,13 +59,6 @@ class FakeRepository:
             "items": [{"content_id": "news:1", "title": "Tin moi"}],
         }
 
-    def fetch_latest_ai_briefing(self) -> dict:
-        return {
-            "created_at": datetime(2026, 5, 27, 4, 0, 0),
-            "briefing": {"headline": "AI trend"},
-        }
-
-
 class NonSerializableService:
     def health(self) -> dict:
         return {"status": "ok"}
