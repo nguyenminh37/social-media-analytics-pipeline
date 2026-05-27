@@ -122,6 +122,99 @@ class YouTubeAnalyticsService:
             "items": self._serialize_datetimes(result.get("items", [])),
         }
 
+    def public_overview(
+        self,
+        *,
+        filter_mode: str,
+        window_hours: int | None,
+        date_from: str | None,
+        date_to: str | None,
+        from_time: datetime,
+        to_time: datetime,
+    ) -> dict:
+        result = self._repository.fetch_public_overview(
+            from_time=from_time,
+            to_time=to_time,
+        )
+        return {
+            "filter_mode": filter_mode,
+            "window_hours": window_hours,
+            "date_from": date_from,
+            "date_to": date_to,
+            "from_time": self._serialize_datetimes(from_time),
+            "to_time": self._serialize_datetimes(to_time),
+            **self._serialize_datetimes(result),
+        }
+
+    def public_trend_alerts(
+        self,
+        *,
+        filter_mode: str,
+        window_hours: int | None,
+        date_from: str | None,
+        date_to: str | None,
+        from_time: datetime,
+        to_time: datetime,
+        page: int,
+        page_size: int,
+    ) -> dict:
+        result = self._repository.fetch_public_trend_alerts(
+            from_time=from_time,
+            to_time=to_time,
+            page=page,
+            page_size=page_size,
+        )
+        return {
+            **self._pagination_payload(
+                filter_mode=filter_mode,
+                window_hours=window_hours,
+                date_from=date_from,
+                date_to=date_to,
+                from_time=from_time,
+                to_time=to_time,
+                page=page,
+                page_size=page_size,
+                total_items=result.get("total_items", 0),
+            ),
+            "items": self._serialize_datetimes(result.get("items", [])),
+        }
+
+    def public_content_events(
+        self,
+        *,
+        filter_mode: str,
+        window_hours: int | None,
+        date_from: str | None,
+        date_to: str | None,
+        from_time: datetime,
+        to_time: datetime,
+        page: int,
+        page_size: int,
+    ) -> dict:
+        result = self._repository.fetch_public_content_events(
+            from_time=from_time,
+            to_time=to_time,
+            page=page,
+            page_size=page_size,
+        )
+        return {
+            **self._pagination_payload(
+                filter_mode=filter_mode,
+                window_hours=window_hours,
+                date_from=date_from,
+                date_to=date_to,
+                from_time=from_time,
+                to_time=to_time,
+                page=page,
+                page_size=page_size,
+                total_items=result.get("total_items", 0),
+            ),
+            "items": self._serialize_datetimes(result.get("items", [])),
+        }
+
+    def public_ai_briefing(self) -> dict:
+        return self._serialize_datetimes(self._repository.fetch_latest_ai_briefing())
+
     def _pagination_payload(
         self,
         *,

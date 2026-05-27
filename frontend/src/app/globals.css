@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3f0eb;
+  --background: #f1f5f9;
   --foreground: #162126;
-  --card: #fbf8f4;
+  --card: #ffffff;
   --card-foreground: #162126;
   --popover: #fffdf9;
   --popover-foreground: #162126;
@@ -11,14 +11,14 @@
   --primary-foreground: #eefcf8;
   --secondary: #dbe8e6;
   --secondary-foreground: #12333a;
-  --muted: #ece5dc;
+  --muted: #e2e8f0;
   --muted-foreground: #627178;
   --accent: #d7eceb;
   --accent-foreground: #11343c;
   --destructive: #b94d39;
   --destructive-foreground: #fff6f2;
-  --border: #d9d2c7;
-  --input: #e6dfd4;
+  --border: #cbd5e1;
+  --input: #cbd5e1;
   --ring: #3f8b88;
   --radius: 1.1rem;
 }
@@ -59,11 +59,7 @@ html {
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 32%),
-    radial-gradient(circle at top right, rgba(30, 64, 175, 0.06), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(243, 240, 235, 0.8)),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
 }
 
@@ -74,21 +70,4 @@ a {
 
 .font-data {
   font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
-}
-
-.dashboard-shell {
-  position: relative;
-}
-
-.dashboard-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.32) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.32) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 85%);
-  pointer-events: none;
-  opacity: 0.22;
 }

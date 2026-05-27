@@ -35,6 +35,36 @@ class FakeRepository:
     def fetch_freshness(self) -> dict:
         return {"latest_content": None, "latest_sentiment_window": None}
 
+    def fetch_public_overview(self, from_time, to_time) -> dict:
+        return {
+            "checked_at": datetime(2026, 5, 27, 4, 0, 0),
+            "content_count": 100,
+            "scored_content_count": 40,
+            "trend_alert_count": 12,
+            "latest_content": {"title": "Tin moi", "event_time": datetime(2026, 5, 27, 3, 55, 0)},
+            "latest_alert": {"keyword": "ai", "window_end": datetime(2026, 5, 27, 4, 0, 0)},
+            "platform_counts": [{"platform": "news", "count": 80}],
+            "sentiment_counts": [{"sentiment": "neutral", "count": 30}],
+        }
+
+    def fetch_public_trend_alerts(self, from_time, to_time, page: int, page_size: int) -> dict:
+        return {
+            "total_items": 12,
+            "items": [{"keyword": "ai", "content_count": 9}],
+        }
+
+    def fetch_public_content_events(self, from_time, to_time, page: int, page_size: int) -> dict:
+        return {
+            "total_items": 100,
+            "items": [{"content_id": "news:1", "title": "Tin moi"}],
+        }
+
+    def fetch_latest_ai_briefing(self) -> dict:
+        return {
+            "created_at": datetime(2026, 5, 27, 4, 0, 0),
+            "briefing": {"headline": "AI trend"},
+        }
+
 
 class NonSerializableService:
     def health(self) -> dict:
@@ -123,6 +153,24 @@ class ServingApiTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertIn("latest_content", payload)
+
+    def test_public_trend_endpoint_returns_new_dashboard_contract(self) -> None:
+        status, payload = self.app.handle_request(
+            "GET",
+            "/api/public/trend-alerts?filter_mode=hours&window_hours=24&page=1&page_size=10",
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["total_items"], 12)
+        self.assertEqual(payload["items"][0]["keyword"], "ai")
+
+        overview_status, overview = self.app.handle_request(
+            "GET",
+            "/api/public/overview?filter_mode=hours&window_hours=24",
+        )
+        self.assertEqual(overview_status, 200)
+        self.assertEqual(overview["content_count"], 100)
+        self.assertEqual(overview["latest_content"]["event_time"], "2026-05-27T03:55:00+00:00")
 
     def test_render_json_returns_error_payload_on_serialization_failure(self) -> None:
         app = ServingApiApp(NonSerializableService())

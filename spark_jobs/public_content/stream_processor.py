@@ -5,7 +5,7 @@ import shutil
 from datetime import datetime
 
 from elasticsearch import Elasticsearch, helpers
-from pymongo import MongoClient, ReplaceOne
+from pymongo import MongoClient, ReplaceOne, UpdateOne
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import (
     array_join,
@@ -247,6 +247,38 @@ def write_mongo(df: DataFrame, batch_id: int, collection_name: str, key_fields: 
     log.info("Wrote %s records to Mongo collection %s", len(records), collection_name)
 
 
+def write_content_mongo(df: DataFrame, batch_id: int) -> None:
+    records = dataframe_records(df)
+    if not records:
+        return
+    sentiment_fields = {
+        "sentiment",
+        "sentiment_score",
+        "sentiment_model",
+        "sentiment_scored_at",
+    }
+    operations = []
+    for record in records:
+        update_fields = {
+            key: value for key, value in record.items() if key not in sentiment_fields
+        }
+        operations.append(
+            UpdateOne(
+                {"content_id": record.get("content_id")},
+                {
+                    "$set": update_fields,
+                    "$setOnInsert": {"sentiment": None, "sentiment_model": None},
+                },
+                upsert=True,
+            )
+        )
+    with MongoClient(MONGO_URI) as client:
+        client[MONGO_DATABASE][PUBLIC_CONTENT_EVENTS_COLLECTION].bulk_write(
+            operations, ordered=False
+        )
+    log.info("Upserted %s content records without resetting sentiment", len(records))
+
+
 def write_elasticsearch(df: DataFrame, batch_id: int, index_name: str, id_fields: list[str]) -> None:
     records = dataframe_records(df, json_safe=True)
     if not records:
@@ -275,9 +307,7 @@ def write_content_batch(df: DataFrame, batch_id: int) -> None:
             "mongo_public_content",
             df,
             batch_id,
-            lambda batch_df, inner_id: write_mongo(
-                batch_df, inner_id, PUBLIC_CONTENT_EVENTS_COLLECTION, ["content_id"]
-            ),
+            write_content_mongo,
         )
     if ENABLE_ES_SINK:
         run_optional_sink(
@@ -318,6 +348,10 @@ def write_trend_batch(df: DataFrame, batch_id: int) -> None:
 
 
 def write_alert_batch(df: DataFrame, batch_id: int) -> None:
+    # Alerts are the most useful trend rows for the demo and are already filtered
+    # for meaningful volume. Mirror them to trend metrics so Kibana/API always
+    # has a materialized trend collection even if Spark skips the parallel trend sink.
+    write_trend_batch(df, batch_id)
     if ENABLE_MONGO_SINK:
         run_optional_sink(
             "mongo_public_alerts",

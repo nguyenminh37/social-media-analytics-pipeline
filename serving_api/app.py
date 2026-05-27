@@ -58,6 +58,24 @@ class ServingApiApp:
                     else HTTPStatus.SERVICE_UNAVAILABLE
                 )
                 return status, health_payload.get("freshness", health_payload)
+            if parsed.path == "/api/public/overview":
+                return HTTPStatus.OK, self._service.public_overview(
+                    **self._time_filter_params(query),
+                )
+            if parsed.path == "/api/public/trend-alerts":
+                return HTTPStatus.OK, self._service.public_trend_alerts(
+                    **self._time_filter_params(query),
+                    page=self._int_param(query, "page", 1),
+                    page_size=self._int_param(query, "page_size", DEFAULT_PAGE_SIZE),
+                )
+            if parsed.path == "/api/public/content-events":
+                return HTTPStatus.OK, self._service.public_content_events(
+                    **self._time_filter_params(query),
+                    page=self._int_param(query, "page", 1),
+                    page_size=self._int_param(query, "page_size", DEFAULT_PAGE_SIZE),
+                )
+            if parsed.path == "/api/public/ai-briefing":
+                return HTTPStatus.OK, self._service.public_ai_briefing()
         except ValueError:
             return HTTPStatus.BAD_REQUEST, {"error": "invalid_query_params"}
         except Exception as exc:

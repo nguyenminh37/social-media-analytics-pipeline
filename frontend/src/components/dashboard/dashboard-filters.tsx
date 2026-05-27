@@ -44,7 +44,7 @@ export function DashboardFilters({
     filter.dateFrom > filter.dateTo;
 
   return (
-    <section className="rounded-[1.75rem] border bg-white/85 p-4 shadow-[0_20px_70px_-55px_rgba(15,23,42,0.45)] backdrop-blur">
+    <section className="rounded-md border bg-white p-4">
       <div className="flex flex-col gap-4">
         <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr_auto] lg:items-end">
           <div className="space-y-2">
@@ -89,7 +89,7 @@ export function DashboardFilters({
               <label className="space-y-2">
                 <span className="text-sm font-medium text-foreground">From</span>
                 <input
-                  className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   onChange={(event) => onDateFromChange(event.target.value)}
                   type="date"
                   value={filter.dateFrom}
@@ -98,7 +98,7 @@ export function DashboardFilters({
               <label className="space-y-2">
                 <span className="text-sm font-medium text-foreground">To</span>
                 <input
-                  className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   onChange={(event) => onDateToChange(event.target.value)}
                   type="date"
                   value={filter.dateTo}
@@ -120,7 +120,7 @@ export function DashboardFilters({
         </div>
 
         {isDateRangeInvalid ? (
-          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
             `From` must be earlier than or equal to `To`.
           </div>
         ) : null}

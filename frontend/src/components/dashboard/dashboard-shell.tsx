@@ -1,175 +1,194 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import type { ReactNode } from "react";
 
 import {
   DEFAULT_PAGE_SIZE,
-  fetchFreshness,
-  fetchHealth,
-  fetchSentimentMetrics,
-  fetchTopVideos,
-  fetchTrendingKeywords,
+  fetchPublicAiBriefing,
+  fetchPublicContentEvents,
+  fetchPublicOverview,
+  fetchPublicTrendAlerts,
+  type AiBriefingResponse,
   type DashboardFilter,
   type FilterMode,
-  type FreshnessResponse,
-  type HealthResponse,
   type HoursOption,
-  type SentimentMetricsResponse,
-  type TopVideosResponse,
-  type TrendingKeywordsResponse,
+  type PublicContentEventsResponse,
+  type PublicOverviewResponse,
+  type PublicTrendAlertsResponse,
 } from "@/lib/api";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
-import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { FreshnessOverview } from "@/components/dashboard/freshness-overview";
-import { SentimentMetricsPanel } from "@/components/dashboard/sentiment-metrics-panel";
-import { TopVideosTable } from "@/components/dashboard/top-videos-table";
-import { TrendingKeywordsPanel } from "@/components/dashboard/trending-keywords-panel";
-import { Separator } from "@/components/ui/separator";
+import { PaginationControls } from "@/components/dashboard/pagination-controls";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface RemoteSection<T> {
   data: T;
   error: string | null;
 }
 
+const EMPTY_OVERVIEW: PublicOverviewResponse = {
+  content_count: 0,
+  scored_content_count: 0,
+  trend_alert_count: 0,
+  latest_content: null,
+  latest_alert: null,
+  latest_briefing: null,
+  platform_counts: [],
+  sentiment_counts: [],
+};
+
+const EMPTY_ALERTS: PublicTrendAlertsResponse = {
+  page: 1,
+  page_size: DEFAULT_PAGE_SIZE,
+  total_items: 0,
+  total_pages: 0,
+  has_previous_page: false,
+  has_next_page: false,
+  items: [],
+};
+
+const EMPTY_CONTENT: PublicContentEventsResponse = {
+  page: 1,
+  page_size: DEFAULT_PAGE_SIZE,
+  total_items: 0,
+  total_pages: 0,
+  has_previous_page: false,
+  has_next_page: false,
+  items: [],
+};
+
+const EMPTY_BRIEFING: AiBriefingResponse = {};
+
 function getDefaultDateRange() {
   const toDate = new Date();
   const fromDate = new Date(toDate.getTime() - 6 * 24 * 60 * 60 * 1000);
-
   return {
     dateFrom: fromDate.toISOString().slice(0, 10),
     dateTo: toDate.toISOString().slice(0, 10),
   };
 }
 
-const EMPTY_HEALTH: HealthResponse = {
-  status: "unknown",
-  error: null,
-  freshness: null,
-};
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+  return new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
 
-const EMPTY_FRESHNESS: FreshnessResponse = {};
+function formatNumber(value?: number | null) {
+  return new Intl.NumberFormat("vi-VN").format(value ?? 0);
+}
 
-const EMPTY_TOP_VIDEOS: TopVideosResponse = {
-  ranking_mode: null,
-  page: 1,
-  page_size: DEFAULT_PAGE_SIZE,
-  total_items: 0,
-  total_pages: 0,
-  has_previous_page: false,
-  has_next_page: false,
-  filter_mode: null,
-  window_hours: null,
-  date_from: null,
-  date_to: null,
-  from_time: null,
-  to_time: null,
-  latest_event_time: null,
-  items: [],
-};
+function formatLag(value?: number | null) {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+  if (value < 0) {
+    return "YouTube trước báo";
+  }
+  return `${Math.round(value)} phút`;
+}
 
-const EMPTY_SENTIMENT: SentimentMetricsResponse = {
-  page: 1,
-  page_size: DEFAULT_PAGE_SIZE,
-  total_items: 0,
-  total_pages: 0,
-  has_previous_page: false,
-  has_next_page: false,
-  filter_mode: null,
-  window_hours: null,
-  date_from: null,
-  date_to: null,
-  from_time: null,
-  to_time: null,
-  latest_window_end: null,
-  total_events: 0,
-  items: [],
-};
+function MetricTile({
+  label,
+  value,
+  subvalue,
+}: {
+  label: string;
+  value: string;
+  subvalue?: string | null;
+}) {
+  return (
+    <div className="rounded-md border bg-white px-4 py-3">
+      <div className="text-xs font-medium uppercase tracking-normal text-slate-500">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-semibold text-slate-950">{value}</div>
+      {subvalue ? <div className="mt-1 text-sm text-slate-600">{subvalue}</div> : null}
+    </div>
+  );
+}
 
-const EMPTY_TRENDING: TrendingKeywordsResponse = {
-  page: 1,
-  page_size: DEFAULT_PAGE_SIZE,
-  total_items: 0,
-  total_pages: 0,
-  has_previous_page: false,
-  has_next_page: false,
-  filter_mode: null,
-  window_hours: null,
-  date_from: null,
-  date_to: null,
-  from_time: null,
-  to_time: null,
-  window_start: null,
-  window_end: null,
-  items: [],
-};
+function Panel({
+  title,
+  children,
+  error,
+}: {
+  title: string;
+  children: ReactNode;
+  error?: string | null;
+}) {
+  return (
+    <section className="rounded-md border bg-white">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+        {error ? <span className="text-sm text-red-700">{error}</span> : null}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
 
 export function DashboardShell() {
-  const defaultDateRange = getDefaultDateRange();
+  const defaultDateRange = useMemo(() => getDefaultDateRange(), []);
   const [filter, setFilter] = useState<DashboardFilter>({
     filterMode: "hours",
     windowHours: 24,
     dateFrom: defaultDateRange.dateFrom,
     dateTo: defaultDateRange.dateTo,
   });
-  const [topVideosPage, setTopVideosPage] = useState(1);
-  const [sentimentPage, setSentimentPage] = useState(1);
-  const [trendingPage, setTrendingPage] = useState(1);
+  const [alertPage, setAlertPage] = useState(1);
+  const [contentPage, setContentPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, startTransition] = useTransition();
-
-  const [health, setHealth] = useState<RemoteSection<HealthResponse>>({
-    data: EMPTY_HEALTH,
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [overview, setOverview] = useState<RemoteSection<PublicOverviewResponse>>({
+    data: EMPTY_OVERVIEW,
     error: null,
   });
-  const [freshness, setFreshness] = useState<RemoteSection<FreshnessResponse>>({
-    data: EMPTY_FRESHNESS,
+  const [alerts, setAlerts] = useState<RemoteSection<PublicTrendAlertsResponse>>({
+    data: EMPTY_ALERTS,
     error: null,
   });
-  const [topVideos, setTopVideos] = useState<RemoteSection<TopVideosResponse>>({
-    data: EMPTY_TOP_VIDEOS,
+  const [content, setContent] = useState<RemoteSection<PublicContentEventsResponse>>({
+    data: EMPTY_CONTENT,
     error: null,
   });
-  const [sentiment, setSentiment] = useState<
-    RemoteSection<SentimentMetricsResponse>
-  >({
-    data: EMPTY_SENTIMENT,
+  const [briefing, setBriefing] = useState<RemoteSection<AiBriefingResponse>>({
+    data: EMPTY_BRIEFING,
     error: null,
   });
-  const [trending, setTrending] = useState<RemoteSection<TrendingKeywordsResponse>>(
-    {
-      data: EMPTY_TRENDING,
-      error: null,
-    },
-  );
 
   useEffect(() => {
     let active = true;
 
     async function loadDashboard() {
-      const [
-        healthResult,
-        freshnessResult,
-        topVideosResult,
-        sentimentResult,
-        trendingResult,
-      ] = await Promise.all([
-        fetchHealth(),
-        fetchFreshness(),
-        fetchTopVideos(filter, topVideosPage),
-        fetchSentimentMetrics(filter, sentimentPage),
-        fetchTrendingKeywords(filter, trendingPage),
-      ]);
+      const [overviewResult, alertResult, contentResult, briefingResult] =
+        await Promise.all([
+          fetchPublicOverview(filter),
+          fetchPublicTrendAlerts(filter, alertPage),
+          fetchPublicContentEvents(filter, contentPage),
+          fetchPublicAiBriefing(),
+        ]);
 
       if (!active) {
         return;
       }
 
-      setHealth({ data: healthResult.data, error: healthResult.error });
-      setFreshness({ data: freshnessResult.data, error: freshnessResult.error });
-      setTopVideos({ data: topVideosResult.data, error: topVideosResult.error });
-      setSentiment({ data: sentimentResult.data, error: sentimentResult.error });
-      setTrending({ data: trendingResult.data, error: trendingResult.error });
+      setOverview({ data: overviewResult.data, error: overviewResult.error });
+      setAlerts({ data: alertResult.data, error: alertResult.error });
+      setContent({ data: contentResult.data, error: contentResult.error });
+      setBriefing({ data: briefingResult.data, error: briefingResult.error });
       setIsInitialLoading(false);
     }
 
@@ -178,18 +197,11 @@ export function DashboardShell() {
     return () => {
       active = false;
     };
-  }, [filter, refreshKey, sentimentPage, topVideosPage, trendingPage]);
+  }, [alertPage, contentPage, filter, refreshKey]);
 
   function resetPages() {
-    setTopVideosPage(1);
-    setSentimentPage(1);
-    setTrendingPage(1);
-  }
-
-  function triggerRefresh() {
-    startTransition(() => {
-      setRefreshKey((value) => value + 1);
-    });
+    setAlertPage(1);
+    setContentPage(1);
   }
 
   function updateFilterMode(value: FilterMode) {
@@ -220,17 +232,26 @@ export function DashboardShell() {
     });
   }
 
+  const aiBriefing = briefing.data.briefing ?? overview.data.latest_briefing?.briefing;
+
   return (
-    <main className="dashboard-shell flex-1">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <DashboardHeader
-          error={health.error}
-          health={{
-            ...health.data,
-            freshness: health.data.freshness ?? freshness.data,
-          }}
-          isLoading={isInitialLoading}
-        />
+    <main className="min-h-screen bg-slate-100 text-slate-950">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-3 border-b border-slate-300 pb-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-normal">
+              Vietnamese Trend Radar
+            </h1>
+            <div className="mt-1 text-sm text-slate-600">
+              {isInitialLoading
+                ? "Loading data"
+                : `Updated ${formatDateTime(overview.data.checked_at)}`}
+            </div>
+          </div>
+          <div className="text-sm text-slate-600">
+            AI: {briefing.data.model ?? overview.data.latest_briefing?.model ?? "-"}
+          </div>
+        </header>
 
         <DashboardFilters
           filter={filter}
@@ -238,41 +259,145 @@ export function DashboardShell() {
           onDateFromChange={updateDateFrom}
           onDateToChange={updateDateTo}
           onFilterModeChange={updateFilterMode}
-          onRefresh={triggerRefresh}
+          onRefresh={() => startTransition(() => setRefreshKey((value) => value + 1))}
           onWindowHoursChange={updateWindowHours}
         />
 
-        <section className="grid gap-6">
-          <FreshnessOverview
-            data={freshness.data}
-            error={freshness.error}
-            isLoading={isInitialLoading}
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <MetricTile
+            label="Content"
+            value={formatNumber(overview.data.content_count)}
+            subvalue={overview.data.platform_counts
+              .map((item) => `${item.platform}: ${formatNumber(item.count)}`)
+              .join(" / ")}
           />
-          <Separator className="bg-border/70" />
-          <TopVideosTable
-            data={topVideos.data}
-            error={topVideos.error}
-            isLoading={isInitialLoading}
-            isRefreshing={isRefreshing}
-            onPageChange={setTopVideosPage}
+          <MetricTile
+            label="Trend alerts"
+            value={formatNumber(overview.data.trend_alert_count)}
+            subvalue={overview.data.latest_alert?.keyword ?? null}
           />
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <SentimentMetricsPanel
-              data={sentiment.data}
-              error={sentiment.error}
-              isLoading={isInitialLoading}
-              isRefreshing={isRefreshing}
-              onPageChange={setSentimentPage}
-            />
-            <TrendingKeywordsPanel
-              data={trending.data}
-              error={trending.error}
-              isLoading={isInitialLoading}
-              isRefreshing={isRefreshing}
-              onPageChange={setTrendingPage}
-            />
-          </div>
+          <MetricTile
+            label="Sentiment scored"
+            value={formatNumber(overview.data.scored_content_count)}
+            subvalue={overview.data.sentiment_counts
+              .map((item) => `${item.sentiment}: ${formatNumber(item.count)}`)
+              .join(" / ")}
+          />
+          <MetricTile
+            label="Latest content"
+            value={overview.data.latest_content?.source ?? "-"}
+            subvalue={overview.data.latest_content?.title ?? null}
+          />
         </section>
+
+        <Panel title="AI briefing" error={briefing.error}>
+          <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <div className="text-lg font-semibold">
+                {aiBriefing?.headline ?? "No briefing yet"}
+              </div>
+              <div className="mt-2 text-sm leading-6 text-slate-700">
+                {aiBriefing?.summary ?? "-"}
+              </div>
+            </div>
+            <div className="grid gap-2 text-sm text-slate-700">
+              {(aiBriefing?.key_insights ?? []).slice(0, 5).map((item) => (
+                <div key={item} className="rounded-md bg-slate-100 px-3 py-2">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="Trend alerts" error={alerts.error}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Keyword</TableHead>
+                <TableHead>Window</TableHead>
+                <TableHead className="text-right">Count</TableHead>
+                <TableHead className="text-right">Score</TableHead>
+                <TableHead>YouTube lag</TableHead>
+                <TableHead>Signal</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {alerts.data.items.map((item) => (
+                <TableRow key={`${item.keyword}-${item.window_end}`}>
+                  <TableCell className="font-medium">{item.keyword}</TableCell>
+                  <TableCell>{formatDateTime(item.window_end)}</TableCell>
+                  <TableCell className="text-right">
+                    {formatNumber(item.content_count)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatNumber(Math.round(item.trend_score ?? 0))}
+                  </TableCell>
+                  <TableCell>{formatLag(item.youtube_lag_minutes)}</TableCell>
+                  <TableCell className="max-w-[420px] whitespace-normal text-slate-700">
+                    {item.message}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <PaginationControls
+            currentPage={alerts.data.page}
+            hasNextPage={alerts.data.has_next_page}
+            hasPreviousPage={alerts.data.has_previous_page}
+            isDisabled={isRefreshing}
+            onPageChange={setAlertPage}
+            totalPages={alerts.data.total_pages}
+          />
+        </Panel>
+
+        <Panel title="Latest content" error={content.error}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Keywords</TableHead>
+                <TableHead>Sentiment</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {content.data.items.map((item) => (
+                <TableRow key={item.content_id ?? item.source_url ?? item.title}>
+                  <TableCell>{formatDateTime(item.event_time)}</TableCell>
+                  <TableCell>{item.source}</TableCell>
+                  <TableCell className="max-w-[440px] whitespace-normal">
+                    {item.source_url ? (
+                      <a
+                        className="text-slate-950 underline decoration-slate-300 underline-offset-2"
+                        href={item.source_url}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {item.title}
+                      </a>
+                    ) : (
+                      item.title
+                    )}
+                  </TableCell>
+                  <TableCell className="max-w-[320px] whitespace-normal text-slate-700">
+                    {item.keywords.slice(0, 6).join(", ")}
+                  </TableCell>
+                  <TableCell>{item.sentiment ?? "-"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <PaginationControls
+            currentPage={content.data.page}
+            hasNextPage={content.data.has_next_page}
+            hasPreviousPage={content.data.has_previous_page}
+            isDisabled={isRefreshing}
+            onPageChange={setContentPage}
+            totalPages={content.data.total_pages}
+          />
+        </Panel>
       </div>
     </main>
   );

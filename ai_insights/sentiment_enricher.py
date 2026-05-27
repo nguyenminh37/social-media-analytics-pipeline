@@ -1,20 +1,23 @@
 import logging
 import json
+import os
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import UTC, datetime, timedelta
 
+from elasticsearch import Elasticsearch
 from pymongo import MongoClient, UpdateOne
 
 from config.ai_config import GEMINI_API_KEY, SENTIMENT_BATCH_LIMIT, SENTIMENT_MODEL_NAME
 from config.mongo_config import MONGO_DATABASE, MONGO_URI
-from config.storage_config import PUBLIC_CONTENT_EVENTS_COLLECTION
+from config.storage_config import PUBLIC_CONTENT_EVENTS_COLLECTION, PUBLIC_CONTENT_EVENTS_INDEX
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
+ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 
 
 def _normalize_label(label: str) -> str:
@@ -52,7 +55,7 @@ def build_sentiment_prompt(records: list[dict]) -> str:
             {
                 "content_id": record["content_id"],
                 "title": record.get("title") or "",
-                "summary": (record.get("summary") or "")[:400],
+                "summary": (record.get("summary") or "")[:160],
             }
         )
     return (
@@ -107,27 +110,55 @@ def run_once() -> int:
         item.get("content_id"): item for item in call_gemini_sentiment(records)
     }
     operations = []
+    scored_records = []
     for record in records:
         prediction = predictions.get(record["content_id"], {})
+        sentiment = _normalize_label(prediction.get("sentiment", ""))
+        score = float(prediction.get("score", 0.0) or 0.0)
+        scored_at = datetime.now(UTC)
         operations.append(
             UpdateOne(
                 {"content_id": record["content_id"]},
                 {
                     "$set": {
-                        "sentiment": _normalize_label(prediction.get("sentiment", "")),
-                        "sentiment_score": float(prediction.get("score", 0.0) or 0.0),
+                        "sentiment": sentiment,
+                        "sentiment_score": score,
                         "sentiment_model": SENTIMENT_MODEL_NAME,
-                        "sentiment_scored_at": datetime.now(UTC),
+                        "sentiment_scored_at": scored_at,
                     }
                 },
             )
+        )
+        scored_records.append(
+            {
+                "content_id": record["content_id"],
+                "sentiment": sentiment,
+                "sentiment_score": score,
+                "sentiment_model": SENTIMENT_MODEL_NAME,
+                "sentiment_scored_at": scored_at.isoformat(),
+            }
         )
     with MongoClient(MONGO_URI) as client:
         client[MONGO_DATABASE][PUBLIC_CONTENT_EVENTS_COLLECTION].bulk_write(
             operations, ordered=False
         )
+    update_elasticsearch(scored_records)
     log.info("Scored sentiment for %s content records", len(operations))
     return len(operations)
+
+
+def update_elasticsearch(scored_records: list[dict]) -> None:
+    try:
+        client = Elasticsearch(ELASTICSEARCH_HOST)
+        for record in scored_records:
+            client.update(
+                index=PUBLIC_CONTENT_EVENTS_INDEX,
+                id=record["content_id"],
+                doc={key: value for key, value in record.items() if key != "content_id"},
+                doc_as_upsert=False,
+            )
+    except Exception as exc:
+        log.warning("Skipping Elasticsearch sentiment update: %s", exc)
 
 
 def main() -> None:

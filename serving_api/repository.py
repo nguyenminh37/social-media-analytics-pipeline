@@ -2,6 +2,9 @@ from datetime import UTC, datetime
 
 from config.mongo_config import MONGO_DATABASE, MONGO_URI
 from config.storage_config import (
+    AI_TREND_BRIEFINGS_COLLECTION,
+    PUBLIC_CONTENT_EVENTS_COLLECTION,
+    PUBLIC_TREND_ALERTS_COLLECTION,
     YOUTUBE_CONTENT_EVENTS_COLLECTION,
     YOUTUBE_SENTIMENT_COLLECTION,
     YOUTUBE_TRENDING_COLLECTION,
@@ -334,3 +337,117 @@ class YouTubeAnalyticsRepository:
             "latest_sentiment_window": latest_sentiment,
             "latest_trending_window": latest_trending,
         }
+
+    def fetch_public_overview(self, from_time: datetime, to_time: datetime) -> dict:
+        from pymongo import MongoClient
+
+        with MongoClient(self._mongo_uri) as client:
+            database = client[self._database]
+            content = database[PUBLIC_CONTENT_EVENTS_COLLECTION]
+            alerts = database[PUBLIC_TREND_ALERTS_COLLECTION]
+            briefings = database[AI_TREND_BRIEFINGS_COLLECTION]
+            content_filter = {"event_time": {"$gte": from_time, "$lt": to_time}}
+            alert_filter = {"window_end": {"$gte": from_time, "$lt": to_time}}
+            latest_content = content.find_one(
+                content_filter,
+                {"_id": 0},
+                sort=[("event_time", -1)],
+            )
+            latest_alert = alerts.find_one(
+                alert_filter,
+                {"_id": 0},
+                sort=[("window_end", -1), ("content_count", -1)],
+            )
+            latest_briefing = briefings.find_one(
+                {},
+                {"_id": 0},
+                sort=[("created_at", -1)],
+            )
+            platform_counts = list(
+                content.aggregate(
+                    [
+                        {"$match": content_filter},
+                        {"$group": {"_id": "$platform", "count": {"$sum": 1}}},
+                        {"$project": {"_id": 0, "platform": "$_id", "count": 1}},
+                        {"$sort": {"count": -1, "platform": 1}},
+                    ]
+                )
+            )
+            sentiment_counts = list(
+                content.aggregate(
+                    [
+                        {"$match": {**content_filter, "sentiment": {"$ne": None}}},
+                        {"$group": {"_id": "$sentiment", "count": {"$sum": 1}}},
+                        {"$project": {"_id": 0, "sentiment": "$_id", "count": 1}},
+                        {"$sort": {"count": -1, "sentiment": 1}},
+                    ]
+                )
+            )
+            return {
+                "checked_at": datetime.now(UTC),
+                "content_count": content.count_documents(content_filter),
+                "scored_content_count": content.count_documents(
+                    {**content_filter, "sentiment": {"$ne": None}}
+                ),
+                "trend_alert_count": alerts.count_documents(alert_filter),
+                "latest_content": latest_content,
+                "latest_alert": latest_alert,
+                "latest_briefing": latest_briefing,
+                "platform_counts": platform_counts,
+                "sentiment_counts": sentiment_counts,
+            }
+
+    def fetch_public_trend_alerts(
+        self,
+        from_time: datetime,
+        to_time: datetime,
+        page: int,
+        page_size: int,
+    ) -> dict:
+        from pymongo import MongoClient
+
+        offset = (page - 1) * page_size
+        filter_query = {"window_end": {"$gte": from_time, "$lt": to_time}}
+        with MongoClient(self._mongo_uri) as client:
+            collection = client[self._database][PUBLIC_TREND_ALERTS_COLLECTION]
+            total_items = collection.count_documents(filter_query)
+            items = list(
+                collection.find(filter_query, {"_id": 0})
+                .sort([("window_end", -1), ("content_count", -1), ("trend_score", -1)])
+                .skip(offset)
+                .limit(page_size)
+            )
+        return {"items": items, "total_items": total_items}
+
+    def fetch_public_content_events(
+        self,
+        from_time: datetime,
+        to_time: datetime,
+        page: int,
+        page_size: int,
+    ) -> dict:
+        from pymongo import MongoClient
+
+        offset = (page - 1) * page_size
+        filter_query = {"event_time": {"$gte": from_time, "$lt": to_time}}
+        with MongoClient(self._mongo_uri) as client:
+            collection = client[self._database][PUBLIC_CONTENT_EVENTS_COLLECTION]
+            total_items = collection.count_documents(filter_query)
+            items = list(
+                collection.find(filter_query, {"_id": 0})
+                .sort([("event_time", -1), ("source", 1)])
+                .skip(offset)
+                .limit(page_size)
+            )
+        return {"items": items, "total_items": total_items}
+
+    def fetch_latest_ai_briefing(self) -> dict:
+        from pymongo import MongoClient
+
+        with MongoClient(self._mongo_uri) as client:
+            briefing = client[self._database][AI_TREND_BRIEFINGS_COLLECTION].find_one(
+                {},
+                {"_id": 0},
+                sort=[("created_at", -1)],
+            )
+        return briefing or {}

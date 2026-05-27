@@ -20,6 +20,9 @@ logs
 
 .playwright-mcp
 
+frontend/node_modules
+frontend/.next
+
 sample_data/*.parquet
 youtube_data
 *.csv

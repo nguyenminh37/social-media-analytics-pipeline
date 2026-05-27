@@ -359,3 +359,222 @@ export function fetchTrendingKeywords(filter: DashboardFilter, page: number) {
     normalizeTrendingKeywordsResponse,
   );
 }
+
+export interface PublicCountItem {
+  platform?: string | null;
+  sentiment?: string | null;
+  count: number;
+}
+
+export interface PublicContentEvent {
+  content_id?: string | null;
+  platform?: string | null;
+  source?: string | null;
+  title?: string | null;
+  source_url?: string | null;
+  event_time?: string | null;
+  keywords: string[];
+  sentiment?: string | null;
+  sentiment_score?: number | null;
+}
+
+export interface PublicTrendAlert {
+  keyword?: string | null;
+  alert_type?: string | null;
+  message?: string | null;
+  window_start?: string | null;
+  window_end?: string | null;
+  content_count?: number | null;
+  news_count?: number | null;
+  youtube_count?: number | null;
+  trend_score?: number | null;
+  youtube_lag_minutes?: number | null;
+  representative_titles: string[];
+}
+
+export interface AiBriefingResponse {
+  briefing_id?: string | null;
+  created_at?: string | null;
+  model?: string | null;
+  input_topic_count?: number | null;
+  briefing?: {
+    headline?: string | null;
+    summary?: string | null;
+    key_insights?: string[];
+    watch_topics?: string[];
+    anomalies?: string[];
+    recommended_filters?: Record<string, unknown> | null;
+  } | null;
+}
+
+export interface PublicOverviewResponse {
+  checked_at?: string | null;
+  content_count: number;
+  scored_content_count: number;
+  trend_alert_count: number;
+  latest_content?: PublicContentEvent | null;
+  latest_alert?: PublicTrendAlert | null;
+  latest_briefing?: AiBriefingResponse | null;
+  platform_counts: PublicCountItem[];
+  sentiment_counts: PublicCountItem[];
+}
+
+export interface PublicTrendAlertsResponse extends PaginationResponse {
+  items: PublicTrendAlert[];
+}
+
+export interface PublicContentEventsResponse extends PaginationResponse {
+  items: PublicContentEvent[];
+}
+
+function asStringArray(value: unknown) {
+  return asArray(value).filter((item): item is string => typeof item === "string");
+}
+
+function normalizePublicContentEvent(value: unknown): PublicContentEvent {
+  const record = asObject(value);
+  return {
+    content_id: asString(record.content_id),
+    platform: asString(record.platform),
+    source: asString(record.source),
+    title: asString(record.title),
+    source_url: asString(record.source_url),
+    event_time: asString(record.event_time),
+    keywords: asStringArray(record.keywords),
+    sentiment: asString(record.sentiment),
+    sentiment_score: asNumber(record.sentiment_score),
+  };
+}
+
+function normalizePublicTrendAlert(value: unknown): PublicTrendAlert {
+  const record = asObject(value);
+  return {
+    keyword: asString(record.keyword),
+    alert_type: asString(record.alert_type),
+    message: asString(record.message),
+    window_start: asString(record.window_start),
+    window_end: asString(record.window_end),
+    content_count: asNumber(record.content_count),
+    news_count: asNumber(record.news_count),
+    youtube_count: asNumber(record.youtube_count),
+    trend_score: asNumber(record.trend_score),
+    youtube_lag_minutes: asNumber(record.youtube_lag_minutes),
+    representative_titles: asStringArray(record.representative_titles),
+  };
+}
+
+function normalizeAiBriefingResponse(value: unknown): AiBriefingResponse {
+  const record = asObject(value);
+  const briefing = asObject(record.briefing);
+  return {
+    briefing_id: asString(record.briefing_id),
+    created_at: asString(record.created_at),
+    model: asString(record.model),
+    input_topic_count: asNumber(record.input_topic_count),
+    briefing: record.briefing
+      ? {
+          headline: asString(briefing.headline),
+          summary: asString(briefing.summary),
+          key_insights: asStringArray(briefing.key_insights),
+          watch_topics: asStringArray(briefing.watch_topics),
+          anomalies: asStringArray(briefing.anomalies),
+          recommended_filters: asObject(briefing.recommended_filters),
+        }
+      : null,
+  };
+}
+
+export function normalizePublicOverviewResponse(
+  value: unknown,
+): PublicOverviewResponse {
+  const record = asObject(value);
+  return {
+    checked_at: asString(record.checked_at),
+    content_count: asNumber(record.content_count) ?? 0,
+    scored_content_count: asNumber(record.scored_content_count) ?? 0,
+    trend_alert_count: asNumber(record.trend_alert_count) ?? 0,
+    latest_content: record.latest_content
+      ? normalizePublicContentEvent(record.latest_content)
+      : null,
+    latest_alert: record.latest_alert
+      ? normalizePublicTrendAlert(record.latest_alert)
+      : null,
+    latest_briefing: record.latest_briefing
+      ? normalizeAiBriefingResponse(record.latest_briefing)
+      : null,
+    platform_counts: asArray(record.platform_counts).map((item) => {
+      const count = asObject(item);
+      return {
+        platform: asString(count.platform),
+        count: asNumber(count.count) ?? 0,
+      };
+    }),
+    sentiment_counts: asArray(record.sentiment_counts).map((item) => {
+      const count = asObject(item);
+      return {
+        sentiment: asString(count.sentiment),
+        count: asNumber(count.count) ?? 0,
+      };
+    }),
+  };
+}
+
+export function normalizePublicTrendAlertsResponse(
+  value: unknown,
+): PublicTrendAlertsResponse {
+  const record = asObject(value);
+  return {
+    ...normalizePaginationResponse(record),
+    items: asArray(record.items).map(normalizePublicTrendAlert),
+  };
+}
+
+export function normalizePublicContentEventsResponse(
+  value: unknown,
+): PublicContentEventsResponse {
+  const record = asObject(value);
+  return {
+    ...normalizePaginationResponse(record),
+    items: asArray(record.items).map(normalizePublicContentEvent),
+  };
+}
+
+export function fetchPublicOverview(filter: DashboardFilter) {
+  return requestProxy(
+    "/api/public/overview",
+    buildFilterSearchParams(filter),
+    normalizePublicOverviewResponse,
+  );
+}
+
+export function fetchPublicTrendAlerts(filter: DashboardFilter, page: number) {
+  return requestProxy(
+    "/api/public/trend-alerts",
+    {
+      ...buildFilterSearchParams(filter),
+      page,
+      page_size: DEFAULT_PAGE_SIZE,
+    },
+    normalizePublicTrendAlertsResponse,
+  );
+}
+
+export function fetchPublicContentEvents(filter: DashboardFilter, page: number) {
+  return requestProxy(
+    "/api/public/content-events",
+    {
+      ...buildFilterSearchParams(filter),
+      page,
+      page_size: DEFAULT_PAGE_SIZE,
+    },
+    normalizePublicContentEventsResponse,
+  );
+}
+
+export function fetchPublicAiBriefing() {
+  return requestProxy(
+    "/api/public/ai-briefing",
+    {},
+    normalizeAiBriefingResponse,
+  );
+}

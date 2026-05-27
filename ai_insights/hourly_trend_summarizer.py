@@ -22,6 +22,7 @@ from config.storage_config import (
     AI_TREND_BRIEFINGS_COLLECTION,
     AI_TREND_BRIEFINGS_INDEX,
     PUBLIC_CONTENT_EVENTS_COLLECTION,
+    PUBLIC_TREND_ALERTS_COLLECTION,
     PUBLIC_TREND_METRICS_COLLECTION,
 )
 
@@ -51,15 +52,22 @@ def fetch_briefing_context(now: datetime | None = None) -> dict:
     from_time = now - timedelta(hours=AI_BRIEFING_LOOKBACK_HOURS)
     with MongoClient(MONGO_URI) as client:
         database = client[MONGO_DATABASE]
+        trend_filter = {"window_end": {"$gte": from_time}}
+        trend_projection = {"_id": 0}
+        trend_sort = [("window_end", DESCENDING), ("content_count", DESCENDING)]
         trends = list(
             database[PUBLIC_TREND_METRICS_COLLECTION]
-            .find(
-                {"window_end": {"$gte": from_time}},
-                {"_id": 0},
-            )
-            .sort([("window_end", DESCENDING), ("content_count", DESCENDING)])
+            .find(trend_filter, trend_projection)
+            .sort(trend_sort)
             .limit(AI_BRIEFING_TOPICS_LIMIT)
         )
+        if not trends:
+            trends = list(
+                database[PUBLIC_TREND_ALERTS_COLLECTION]
+                .find(trend_filter, trend_projection)
+                .sort(trend_sort)
+                .limit(AI_BRIEFING_TOPICS_LIMIT)
+            )
         topic_samples = {}
         for trend in trends[:5]:
             keyword = trend.get("keyword")
