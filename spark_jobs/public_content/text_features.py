@@ -16,8 +16,13 @@ VIETNAMESE_STOPWORDS = {
     "den",
     "duoc",
     "gio",
+    "hom",
+    "http",
+    "https",
     "hai",
     "hay",
+    "html",
+    "htm",
     "hon",
     "khi",
     "khong",
@@ -28,8 +33,12 @@ VIETNAMESE_STOPWORDS = {
     "nay",
     "neu",
     "nhieu",
+    "nhat",
     "nhung",
+    "jpg",
+    "jpeg",
     "qua",
+    "png",
     "sau",
     "the",
     "theo",
@@ -47,6 +56,18 @@ VIETNAMESE_STOPWORDS = {
     "vi",
     "viet",
     "nam",
+    "www",
+    "com",
+    "net",
+    "org",
+    "rss",
+    "cdn",
+    "media",
+    "thumb",
+    "image",
+    "youtube",
+    "watch",
+    "vtv24",
 }
 
 def _ascii_fold(text: str) -> str:
@@ -59,6 +80,7 @@ def _ascii_fold(text: str) -> str:
 
 def extract_keywords(text: str | None, limit: int = 8) -> list[str]:
     folded = _ascii_fold(text or "")
+    folded = re.sub(r"https?://\S+|www\.\S+", " ", folded)
     tokens = re.findall(r"[a-z0-9]+", folded)
     candidates = [
         token

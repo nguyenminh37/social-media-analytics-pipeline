@@ -7,6 +7,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import gzip
 from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
@@ -50,10 +51,21 @@ def clean_text(value: str | None) -> str:
 
 
 def fetch_payload(url: str, user_agent: str = DEFAULT_USER_AGENT) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": user_agent})
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": user_agent,
+            "Accept-Encoding": "gzip",
+        },
+    )
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
-            return response.read()
+            payload = response.read()
+            if response.headers.get("Content-Encoding") == "gzip" or payload.startswith(
+                b"\x1f\x8b"
+            ):
+                return gzip.decompress(payload)
+            return payload
     except urllib.error.URLError as exc:
         reason = getattr(exc, "reason", None)
         if (
@@ -68,7 +80,12 @@ def fetch_payload(url: str, user_agent: str = DEFAULT_USER_AGENT) -> bytes:
             with urllib.request.urlopen(
                 request, timeout=20, context=insecure_context
             ) as response:
-                return response.read()
+                payload = response.read()
+                if response.headers.get("Content-Encoding") == "gzip" or payload.startswith(
+                    b"\x1f\x8b"
+                ):
+                    return gzip.decompress(payload)
+                return payload
         raise
 
 
