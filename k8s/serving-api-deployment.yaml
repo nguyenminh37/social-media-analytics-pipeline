@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: serving-api
-          image: social-media-collector:local
+          image: social-media-collector:stable-demo
           imagePullPolicy: Never
           command: ["python", "-m", "serving_api.server"]
           env:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TAG=${IMAGE_TAG:-local}
+TAG=${IMAGE_TAG:-stable-demo}
 NS=social-media-analytics
 
 cd "$(dirname "$0")/.."
@@ -14,6 +14,7 @@ kubectl set image -n "$NS" deployment/social-media-raw-archiver "archiver=social
 kubectl set image -n "$NS" deployment/social-media-ai-briefing "ai-briefing=social-media-collector:${TAG}"
 kubectl set image -n "$NS" deployment/social-media-sentiment-enricher "sentiment-enricher=social-media-collector:${TAG}"
 kubectl set image -n "$NS" deployment/social-media-serving-api "serving-api=social-media-collector:${TAG}"
+kubectl set image -n "$NS" deployment/social-media-frontend "frontend=social-media-frontend:${TAG}"
 kubectl rollout status -n "$NS" deployment/social-media-spark
 kubectl rollout status -n "$NS" deployment/social-media-news-rss
 kubectl rollout status -n "$NS" deployment/social-media-youtube-rss
@@ -21,5 +22,7 @@ kubectl rollout status -n "$NS" deployment/social-media-raw-archiver
 kubectl rollout status -n "$NS" deployment/social-media-ai-briefing
 kubectl rollout status -n "$NS" deployment/social-media-sentiment-enricher
 kubectl rollout status -n "$NS" deployment/social-media-serving-api
+kubectl rollout status -n "$NS" deployment/social-media-frontend
 
 printf 'spark image: social-media-spark:%s\n' "$TAG"
+printf 'frontend image: social-media-frontend:%s\n' "$TAG"

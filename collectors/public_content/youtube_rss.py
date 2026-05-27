@@ -90,7 +90,7 @@ def publish_youtube_rss_snapshot(producer, records: list[dict]) -> int:
 
 
 def run_once(seen_video_ids: set[str] | None = None) -> dict:
-    seen_video_ids = seen_video_ids or set()
+    seen_video_ids = seen_video_ids if seen_video_ids is not None else set()
     try:
         producer = create_producer()
     except NoBrokersAvailable:

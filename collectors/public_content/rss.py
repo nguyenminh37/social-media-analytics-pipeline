@@ -107,7 +107,7 @@ def publish_news_snapshot(producer, records: list[dict]) -> int:
 
 
 def run_once(seen_article_ids: set[str] | None = None) -> dict:
-    seen_article_ids = seen_article_ids or set()
+    seen_article_ids = seen_article_ids if seen_article_ids is not None else set()
     try:
         producer = create_producer()
     except NoBrokersAvailable:

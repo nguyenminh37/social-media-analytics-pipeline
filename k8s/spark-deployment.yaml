@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: spark
-          image: social-media-spark:local
+          image: social-media-spark:stable-demo
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -25,7 +25,7 @@ spec:
             - name: PYTHONPATH
               value: /opt/social-media-analytics
             - name: RESET_CHECKPOINT_ON_START
-              value: "true"
+              value: "false"
             - name: SPARK_RESOLVE_PACKAGES
               value: "false"
           command:

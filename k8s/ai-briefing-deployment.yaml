@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: ai-briefing
-          image: social-media-collector:local
+          image: social-media-collector:stable-demo
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:

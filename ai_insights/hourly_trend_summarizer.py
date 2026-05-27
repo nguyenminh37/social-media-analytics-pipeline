@@ -53,19 +53,57 @@ def fetch_briefing_context(now: datetime | None = None) -> dict:
     with MongoClient(MONGO_URI) as client:
         database = client[MONGO_DATABASE]
         trend_filter = {"window_end": {"$gte": from_time}}
-        trend_projection = {"_id": 0}
-        trend_sort = [("window_end", DESCENDING), ("content_count", DESCENDING)]
         trends = list(
-            database[PUBLIC_TREND_METRICS_COLLECTION]
-            .find(trend_filter, trend_projection)
-            .sort(trend_sort)
-            .limit(AI_BRIEFING_TOPICS_LIMIT)
+            database[PUBLIC_TREND_METRICS_COLLECTION].aggregate(
+                [
+                    {"$match": trend_filter},
+                    {
+                        "$group": {
+                            "_id": "$keyword",
+                            "content_count": {"$sum": "$content_count"},
+                            "peak_window_count": {"$max": "$content_count"},
+                            "window_count": {"$sum": 1},
+                            "latest_window_end": {"$max": "$window_end"},
+                            "first_news_time": {"$min": "$first_news_time"},
+                            "first_youtube_time": {"$min": "$first_youtube_time"},
+                            "youtube_lag_minutes": {"$min": "$youtube_lag_minutes"},
+                        }
+                    },
+                    {
+                        "$project": {
+                            "_id": 0,
+                            "keyword": "$_id",
+                            "content_count": 1,
+                            "peak_window_count": 1,
+                            "window_count": 1,
+                            "latest_window_end": 1,
+                            "first_news_time": 1,
+                            "first_youtube_time": 1,
+                            "youtube_lag_minutes": 1,
+                        }
+                    },
+                    {
+                        "$sort": {
+                            "content_count": DESCENDING,
+                            "peak_window_count": DESCENDING,
+                            "latest_window_end": DESCENDING,
+                        }
+                    },
+                    {"$limit": AI_BRIEFING_TOPICS_LIMIT},
+                ]
+            )
         )
         if not trends:
             trends = list(
                 database[PUBLIC_TREND_ALERTS_COLLECTION]
-                .find(trend_filter, trend_projection)
-                .sort(trend_sort)
+                .find(trend_filter, {"_id": 0})
+                .sort(
+                    [
+                        ("content_count", DESCENDING),
+                        ("trend_score", DESCENDING),
+                        ("window_end", DESCENDING),
+                    ]
+                )
                 .limit(AI_BRIEFING_TOPICS_LIMIT)
             )
         topic_samples = {}
@@ -107,6 +145,7 @@ def build_prompt(context: dict) -> str:
     return (
         "Ban la analyst cho dashboard xu huong thoi su Viet Nam. "
         "Chi dung du lieu JSON duoc cung cap, khong suy doan ngoai dataset. "
+        "Uu tien cac cum chu de co nghia, bo qua token chung chung neu co mau tin tot hon. "
         "Tra ve JSON hop le voi cac field: headline, summary, key_insights, "
         "watch_topics, anomalies, recommended_filters. Viet ngan gon bang tieng Viet.\n\n"
         f"DATA:\n{json.dumps(context, ensure_ascii=False)}"
@@ -153,30 +192,48 @@ def call_gemini(prompt: str) -> dict:
 def build_template_briefing(context: dict) -> dict:
     trends = context.get("trends", [])
     top = trends[0] if trends else {}
+    samples = context.get("topic_samples", {})
     headline = (
-        f"Topic '{top.get('keyword')}' dang dan dau voi {top.get('content_count')} tin"
+        f"Nổi bật: {top.get('keyword')} với {top.get('content_count')} lượt nhắc"
         if top
-        else "Chua co du lieu trend trong khung gio hien tai"
+        else "Chưa có chủ đề đủ mạnh trong khung giờ hiện tại"
     )
+    top_topics = [trend.get("keyword") for trend in trends[:3] if trend.get("keyword")]
+    summary = (
+        "Các chủ đề đáng theo dõi: " + ", ".join(top_topics) + "."
+        if top_topics
+        else "Chưa có đủ dữ liệu để tạo briefing."
+    )
+    insights = []
+    for trend in trends[:5]:
+        keyword = trend.get("keyword")
+        if not keyword:
+            continue
+        titles = [sample.get("title") for sample in samples.get(keyword, []) if sample.get("title")]
+        example = f" Ví dụ: {titles[0]}" if titles else ""
+        insights.append(f"{keyword}: {trend.get('content_count', 0)} lượt nhắc.{example}")
+
+    anomalies = [
+        f"{trend.get('keyword')}: YouTube xuất hiện trước báo"
+        for trend in trends[:5]
+        if trend.get("youtube_lag_minutes") is not None and trend.get("youtube_lag_minutes") < 0
+    ]
     return {
         "headline": headline,
-        "summary": "Briefing fallback duoc tao tu metric rule-based.",
-        "key_insights": [
-            f"{trend.get('keyword')}: {trend.get('content_count')} mentions"
-            for trend in trends[:5]
-        ],
-        "watch_topics": [trend.get("keyword") for trend in trends[:5]],
-        "anomalies": [],
-        "recommended_filters": {"time_range": "last_6h"},
+        "summary": summary,
+        "key_insights": insights,
+        "watch_topics": [trend.get("keyword") for trend in trends[:5] if trend.get("keyword")],
+        "anomalies": anomalies,
+        "recommended_filters": {"time_range": f"last_{AI_BRIEFING_LOOKBACK_HOURS}h"},
     }
 
 
-def persist_briefing(context: dict, briefing: dict) -> dict:
+def persist_briefing(context: dict, briefing: dict, model_name: str | None = None) -> dict:
     now = _utc_now()
     document = {
         "briefing_id": f"briefing:{now.strftime('%Y%m%d%H%M%S')}",
         "created_at": now,
-        "model": GEMINI_MODEL if GEMINI_API_KEY else "rule_based_fallback",
+        "model": model_name or (GEMINI_MODEL if GEMINI_API_KEY else "rule_based_fallback"),
         "window_start": context.get("window_start"),
         "window_end": context.get("window_end"),
         "input_topic_count": len(context.get("trends", [])),
@@ -203,10 +260,17 @@ def persist_briefing(context: dict, briefing: dict) -> dict:
 def run_once() -> dict:
     context = fetch_briefing_context()
     if GEMINI_API_KEY and context.get("trends"):
-        briefing = call_gemini(build_prompt(context))
+        try:
+            briefing = call_gemini(build_prompt(context))
+            model_name = GEMINI_MODEL
+        except Exception as exc:
+            log.warning("Falling back to template AI briefing: %s", exc)
+            briefing = build_template_briefing(context)
+            model_name = "rule_based_fallback"
     else:
         briefing = build_template_briefing(context)
-    document = persist_briefing(context, briefing)
+        model_name = "rule_based_fallback"
+    document = persist_briefing(context, briefing, model_name)
     log.info("Created AI trend briefing %s", document["briefing_id"])
     return _json_ready(document)
 

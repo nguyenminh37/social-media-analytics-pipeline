@@ -64,6 +64,10 @@ ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 ENABLE_MINIO_SINK = os.getenv("ENABLE_MINIO_SINK", "true").lower() == "true"
 ENABLE_MONGO_SINK = os.getenv("ENABLE_MONGO_SINK", "true").lower() == "true"
 ENABLE_ES_SINK = os.getenv("ENABLE_ES_SINK", "true").lower() == "true"
+ENABLE_KAFKA_SINK = os.getenv("ENABLE_KAFKA_SINK", "true").lower() == "true"
+ENABLE_FULL_TREND_METRICS_SINK = (
+    os.getenv("ENABLE_FULL_TREND_METRICS_SINK", "true").lower() == "true"
+)
 STRICT_SINKS = os.getenv("STRICT_SINKS", "false").lower() == "true"
 TREND_ALERT_MIN_CONTENT_COUNT = int(os.getenv("TREND_ALERT_MIN_CONTENT_COUNT", "4"))
 CHECKPOINT_BASE = os.getenv(
@@ -207,11 +211,11 @@ def build_alerts_df(trend_df: DataFrame) -> DataFrame:
             "message",
             concat_ws(
                 " ",
-                lit("Topic"),
+                lit("Chủ đề"),
                 col("keyword"),
-                lit("reached"),
+                lit("đạt"),
                 col("content_count").cast("string"),
-                lit("mentions in the latest trend window"),
+                lit("lượt nhắc trong khung 1 giờ gần nhất"),
             ),
         )
     )
@@ -403,22 +407,38 @@ def main() -> None:
     alerts_df = build_alerts_df(trend_df)
 
     queries = [
-        write_kafka_stream(content_df, SILVER_PUBLIC_CONTENT_EVENTS_TOPIC, "kafka_content"),
-        write_kafka_stream(trend_df, PUBLIC_TREND_METRICS_TOPIC, "kafka_trends"),
-        write_kafka_stream(alerts_df, PUBLIC_TREND_ALERTS_TOPIC, "kafka_alerts"),
         content_df.writeStream.foreachBatch(write_content_batch)
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/mongo_es_content")
         .outputMode("append")
-        .start(),
-        trend_df.writeStream.foreachBatch(write_trend_batch)
-        .option("checkpointLocation", f"{CHECKPOINT_BASE}/mongo_es_trends")
-        .outputMode("update")
         .start(),
         alerts_df.writeStream.foreachBatch(write_alert_batch)
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/mongo_es_alerts")
         .outputMode("update")
         .start(),
     ]
+
+    if ENABLE_FULL_TREND_METRICS_SINK:
+        queries.append(
+            trend_df.writeStream.foreachBatch(write_trend_batch)
+            .option("checkpointLocation", f"{CHECKPOINT_BASE}/mongo_es_trends")
+            .outputMode("update")
+            .start()
+        )
+
+    if ENABLE_KAFKA_SINK:
+        queries.extend(
+            [
+                write_kafka_stream(
+                    content_df, SILVER_PUBLIC_CONTENT_EVENTS_TOPIC, "kafka_content"
+                ),
+                write_kafka_stream(
+                    trend_df, PUBLIC_TREND_METRICS_TOPIC, "kafka_trends"
+                ),
+                write_kafka_stream(
+                    alerts_df, PUBLIC_TREND_ALERTS_TOPIC, "kafka_alerts"
+                ),
+            ]
+        )
 
     if ENABLE_MINIO_SINK:
         queries.extend(

@@ -1,8 +1,16 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from collectors.public_content.rss import parse_news_rss, publish_news_snapshot
-from collectors.public_content.youtube_rss import parse_youtube_rss, publish_youtube_rss_snapshot
+from collectors.public_content.rss import (
+    collect_news_snapshot,
+    parse_news_rss,
+    publish_news_snapshot,
+)
+from collectors.public_content.youtube_rss import (
+    collect_youtube_rss_snapshot,
+    parse_youtube_rss,
+    publish_youtube_rss_snapshot,
+)
 from config.kafka_config import RAW_NEWS_ARTICLES_TOPIC, RAW_YOUTUBE_RSS_VIDEOS_TOPIC
 from config.source_config import RssSource, YouTubeRssChannel
 
@@ -75,6 +83,32 @@ class PublicContentCollectorTests(unittest.TestCase):
         mock_publish.assert_called_once_with(
             producer, records, RAW_YOUTUBE_RSS_VIDEOS_TOPIC, "video_id"
         )
+
+    @patch("collectors.public_content.rss.fetch_source")
+    def test_collect_news_snapshot_reuses_empty_seen_set(self, mock_fetch):
+        source = RssSource("example", "https://example.test/rss", "business")
+        mock_fetch.return_value = [{"article_id": "article-1"}]
+        seen_ids: set[str] = set()
+
+        first = collect_news_snapshot([source], seen_ids)
+        second = collect_news_snapshot([source], seen_ids)
+
+        self.assertEqual(first, [{"article_id": "article-1"}])
+        self.assertEqual(second, [])
+        self.assertEqual(seen_ids, {"article-1"})
+
+    @patch("collectors.public_content.youtube_rss.fetch_channel")
+    def test_collect_youtube_snapshot_reuses_empty_seen_set(self, mock_fetch):
+        channel = YouTubeRssChannel("news_tv", "UCabc", "news")
+        mock_fetch.return_value = [{"video_id": "video-1"}]
+        seen_ids: set[str] = set()
+
+        first = collect_youtube_rss_snapshot([channel], seen_ids)
+        second = collect_youtube_rss_snapshot([channel], seen_ids)
+
+        self.assertEqual(first, [{"video_id": "video-1"}])
+        self.assertEqual(second, [])
+        self.assertEqual(seen_ids, {"video-1"})
 
 
 if __name__ == "__main__":

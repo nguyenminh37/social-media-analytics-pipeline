@@ -28,9 +28,11 @@ data:
   MONGO_URI: mongodb://social-media-mongodb:27017
   MONGO_DATABASE: analytics
   ELASTICSEARCH_HOST: http://social-media-elasticsearch:9200
-  ENABLE_MINIO_SINK: "true"
+  ENABLE_MINIO_SINK: "false"
   ENABLE_MONGO_SINK: "true"
   ENABLE_ES_SINK: "true"
+  ENABLE_KAFKA_SINK: "true"
+  ENABLE_FULL_TREND_METRICS_SINK: "true"
   MONGO_YOUTUBE_CONTENT_EVENTS_COLLECTION: youtube_content_events
   MONGO_YOUTUBE_CHANNEL_SNAPSHOTS_COLLECTION: youtube_channel_snapshots
   MONGO_YOUTUBE_SENTIMENT_COLLECTION: youtube_sentiment_metrics
@@ -50,3 +52,4 @@ data:
   AI_BRIEFING_LOOKBACK_HOURS: "6"
   SENTIMENT_MODEL_NAME: gemini-3.5-flash
   SENTIMENT_BATCH_LIMIT: "8"
+  ANALYTICS_API_BASE_URL: http://social-media-serving-api:8081

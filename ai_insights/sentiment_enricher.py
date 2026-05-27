@@ -29,6 +29,17 @@ def _normalize_label(label: str) -> str:
     return "neutral"
 
 
+def build_template_sentiment(records: list[dict]) -> list[dict]:
+    return [
+        {
+            "content_id": record["content_id"],
+            "sentiment": "neutral",
+            "score": 0.0,
+        }
+        for record in records
+    ]
+
+
 def fetch_unscored_content(limit: int = SENTIMENT_BATCH_LIMIT) -> list[dict]:
     since = datetime.now(UTC) - timedelta(days=7)
     with MongoClient(MONGO_URI) as client:
@@ -106,9 +117,12 @@ def run_once() -> int:
     records = fetch_unscored_content()
     if not records:
         return 0
-    predictions = {
-        item.get("content_id"): item for item in call_gemini_sentiment(records)
-    }
+    try:
+        sentiment_items = call_gemini_sentiment(records)
+    except Exception as exc:
+        log.warning("Falling back to neutral sentiment labels: %s", exc)
+        sentiment_items = build_template_sentiment(records)
+    predictions = {item.get("content_id"): item for item in sentiment_items}
     operations = []
     scored_records = []
     for record in records:

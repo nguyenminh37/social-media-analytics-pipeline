@@ -19,4 +19,5 @@ resources:
   - ai-briefing-deployment.yaml
   - sentiment-enricher-deployment.yaml
   - serving-api-deployment.yaml
+  - frontend-deployment.yaml
   - monitoring/elasticsearch-smoke-check-job.yaml

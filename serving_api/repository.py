@@ -356,7 +356,7 @@ class YouTubeAnalyticsRepository:
             latest_alert = alerts.find_one(
                 alert_filter,
                 {"_id": 0},
-                sort=[("window_end", -1), ("content_count", -1)],
+                sort=[("content_count", -1), ("trend_score", -1), ("window_end", -1)],
             )
             latest_briefing = briefings.find_one(
                 {},
@@ -413,7 +413,14 @@ class YouTubeAnalyticsRepository:
             total_items = collection.count_documents(filter_query)
             items = list(
                 collection.find(filter_query, {"_id": 0})
-                .sort([("window_end", -1), ("content_count", -1), ("trend_score", -1)])
+                .sort(
+                    [
+                        ("content_count", -1),
+                        ("trend_score", -1),
+                        ("window_end", -1),
+                        ("keyword", 1),
+                    ]
+                )
                 .skip(offset)
                 .limit(page_size)
             )
