@@ -84,16 +84,6 @@ function formatNumber(value?: number | null) {
   return new Intl.NumberFormat("vi-VN").format(value ?? 0);
 }
 
-function formatLag(value?: number | null) {
-  if (value === null || value === undefined) {
-    return "-";
-  }
-  if (value < 0) {
-    return "YouTube trước báo";
-  }
-  return `${Math.round(value)} phút`;
-}
-
 function MetricTile({
   label,
   value,
@@ -131,6 +121,16 @@ function Panel({
       </div>
       <div className="p-4">{children}</div>
     </section>
+  );
+}
+
+function EmptyTableRow({ colSpan, label }: { colSpan: number; label: string }) {
+  return (
+    <TableRow>
+      <TableCell className="py-8 text-center text-sm text-slate-500" colSpan={colSpan}>
+        {label}
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -281,27 +281,29 @@ export function DashboardShell() {
                 <TableHead>Window</TableHead>
                 <TableHead className="text-right">Count</TableHead>
                 <TableHead className="text-right">Score</TableHead>
-                <TableHead>YouTube lag</TableHead>
                 <TableHead>Signal</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {alerts.data.items.map((item) => (
-                <TableRow key={`${item.keyword}-${item.window_end}`}>
-                  <TableCell className="font-medium">{item.keyword}</TableCell>
-                  <TableCell>{formatDateTime(item.window_end)}</TableCell>
-                  <TableCell className="text-right">
-                    {formatNumber(item.content_count)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatNumber(Math.round(item.trend_score ?? 0))}
-                  </TableCell>
-                  <TableCell>{formatLag(item.youtube_lag_minutes)}</TableCell>
-                  <TableCell className="max-w-[420px] whitespace-normal text-slate-700">
-                    {item.message}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {alerts.data.items.length ? (
+                alerts.data.items.map((item) => (
+                  <TableRow key={`${item.keyword}-${item.window_end}`}>
+                    <TableCell className="font-medium">{item.keyword}</TableCell>
+                    <TableCell>{formatDateTime(item.window_end)}</TableCell>
+                    <TableCell className="text-right">
+                      {formatNumber(item.content_count)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatNumber(Math.round(item.trend_score ?? 0))}
+                    </TableCell>
+                    <TableCell className="max-w-[420px] whitespace-normal text-slate-700">
+                      {item.message}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <EmptyTableRow colSpan={5} label="No trend alerts in this time range." />
+              )}
             </TableBody>
           </Table>
           <PaginationControls
@@ -326,30 +328,34 @@ export function DashboardShell() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {content.data.items.map((item) => (
-                <TableRow key={item.content_id ?? item.source_url ?? item.title}>
-                  <TableCell>{formatDateTime(item.event_time)}</TableCell>
-                  <TableCell>{item.source}</TableCell>
-                  <TableCell className="max-w-[440px] whitespace-normal">
-                    {item.source_url ? (
-                      <a
-                        className="text-slate-950 underline decoration-slate-300 underline-offset-2"
-                        href={item.source_url}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        {item.title}
-                      </a>
-                    ) : (
-                      item.title
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-[320px] whitespace-normal text-slate-700">
-                    {item.keywords.slice(0, 6).join(", ")}
-                  </TableCell>
-                  <TableCell>{item.sentiment ?? "-"}</TableCell>
-                </TableRow>
-              ))}
+              {content.data.items.length ? (
+                content.data.items.map((item) => (
+                  <TableRow key={item.content_id ?? item.source_url ?? item.title}>
+                    <TableCell>{formatDateTime(item.event_time)}</TableCell>
+                    <TableCell>{item.source}</TableCell>
+                    <TableCell className="max-w-[440px] whitespace-normal">
+                      {item.source_url ? (
+                        <a
+                          className="text-slate-950 underline decoration-slate-300 underline-offset-2"
+                          href={item.source_url}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {item.title}
+                        </a>
+                      ) : (
+                        item.title
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[320px] whitespace-normal text-slate-700">
+                      {item.keywords.slice(0, 6).join(", ")}
+                    </TableCell>
+                    <TableCell>{item.sentiment ?? "-"}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <EmptyTableRow colSpan={5} label="No content events in this time range." />
+              )}
             </TableBody>
           </Table>
           <PaginationControls

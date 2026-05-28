@@ -16,12 +16,10 @@ from pyspark.sql.functions import (
     current_timestamp,
     explode,
     lit,
-    min as spark_min,
     struct,
     to_json,
     to_timestamp,
     udf,
-    when,
     window,
 )
 from pyspark.sql.types import ArrayType, StringType, StructField, StructType
@@ -186,18 +184,9 @@ def build_trend_metrics_df(content_df: DataFrame) -> DataFrame:
         keyword_events.groupBy(window(col("event_time"), "1 hour", "15 minutes"), col("keyword"))
         .agg(
             count("*").alias("content_count"),
-            spark_min(when(col("platform") == "news", col("event_time"))).alias("first_news_time"),
-            spark_min(when(col("platform") == "youtube", col("event_time"))).alias("first_youtube_time"),
         )
         .withColumn("window_start", col("window.start"))
         .withColumn("window_end", col("window.end"))
-        .withColumn(
-            "youtube_lag_minutes",
-            when(
-                col("first_news_time").isNotNull() & col("first_youtube_time").isNotNull(),
-                (col("first_youtube_time").cast("long") - col("first_news_time").cast("long")) / 60,
-            ),
-        )
         .withColumn("trend_score", col("content_count").cast("double"))
         .drop("window")
     )

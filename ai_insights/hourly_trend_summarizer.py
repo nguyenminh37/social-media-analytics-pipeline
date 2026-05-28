@@ -65,9 +65,6 @@ def fetch_briefing_context(now: datetime | None = None) -> dict:
                             "peak_window_count": {"$max": "$content_count"},
                             "window_count": {"$sum": 1},
                             "latest_window_end": {"$max": "$window_end"},
-                            "first_news_time": {"$min": "$first_news_time"},
-                            "first_youtube_time": {"$min": "$first_youtube_time"},
-                            "youtube_lag_minutes": {"$min": "$youtube_lag_minutes"},
                         }
                     },
                     {
@@ -78,9 +75,6 @@ def fetch_briefing_context(now: datetime | None = None) -> dict:
                             "peak_window_count": 1,
                             "window_count": 1,
                             "latest_window_end": 1,
-                            "first_news_time": 1,
-                            "first_youtube_time": 1,
-                            "youtube_lag_minutes": 1,
                         }
                     },
                     {
@@ -216,17 +210,12 @@ def build_template_briefing(context: dict) -> dict:
         example = f" Ví dụ: {titles[0]}" if titles else ""
         insights.append(f"{keyword}: {trend.get('content_count', 0)} lượt nhắc.{example}")
 
-    anomalies = [
-        f"{trend.get('keyword')}: YouTube xuất hiện trước báo"
-        for trend in trends[:5]
-        if trend.get("youtube_lag_minutes") is not None and trend.get("youtube_lag_minutes") < 0
-    ]
     return {
         "headline": headline,
         "summary": summary,
         "key_insights": insights,
         "watch_topics": [trend.get("keyword") for trend in trends[:5] if trend.get("keyword")],
-        "anomalies": anomalies,
+        "anomalies": [],
         "recommended_filters": {"time_range": f"last_{AI_BRIEFING_LOOKBACK_HOURS}h"},
     }
 

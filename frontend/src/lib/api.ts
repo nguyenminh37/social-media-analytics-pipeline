@@ -388,7 +388,6 @@ export interface PublicTrendAlert {
   news_count?: number | null;
   youtube_count?: number | null;
   trend_score?: number | null;
-  youtube_lag_minutes?: number | null;
   representative_titles: string[];
 }
 
@@ -442,7 +441,6 @@ function normalizePublicTrendAlert(value: unknown): PublicTrendAlert {
     news_count: asNumber(record.news_count),
     youtube_count: asNumber(record.youtube_count),
     trend_score: asNumber(record.trend_score),
-    youtube_lag_minutes: asNumber(record.youtube_lag_minutes),
     representative_titles: asStringArray(record.representative_titles),
   };
 }

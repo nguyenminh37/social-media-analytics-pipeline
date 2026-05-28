@@ -353,7 +353,12 @@ class YouTubeAnalyticsRepository:
             )
             latest_alert = alerts.find_one(
                 alert_filter,
-                {"_id": 0},
+                {
+                    "_id": 0,
+                    "first_news_time": 0,
+                    "first_youtube_time": 0,
+                    "youtube_lag_minutes": 0,
+                },
                 sort=[("content_count", -1), ("trend_score", -1), ("window_end", -1)],
             )
             platform_counts = list(
@@ -404,7 +409,15 @@ class YouTubeAnalyticsRepository:
             collection = client[self._database][PUBLIC_TREND_ALERTS_COLLECTION]
             total_items = collection.count_documents(filter_query)
             items = list(
-                collection.find(filter_query, {"_id": 0})
+                collection.find(
+                    filter_query,
+                    {
+                        "_id": 0,
+                        "first_news_time": 0,
+                        "first_youtube_time": 0,
+                        "youtube_lag_minutes": 0,
+                    },
+                )
                 .sort(
                     [
                         ("content_count", -1),
