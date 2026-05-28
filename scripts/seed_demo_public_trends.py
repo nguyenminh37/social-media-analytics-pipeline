@@ -36,6 +36,9 @@ YOUTUBE_SOURCES = [
     ("tuoitre_media", "news"),
 ]
 
+DEMO_WINDOW_COUNT = 48
+DEMO_WINDOW_STEP_MINUTES = 30
+
 
 def message_for_topic(keyword: str, content_count: int, titles: list[str]) -> str:
     return (
@@ -137,65 +140,22 @@ def build_demo_documents(now: datetime) -> tuple[list[dict], list[dict], list[di
     trend_alerts: list[dict] = []
     news_sources = cycle(NEWS_SOURCES)
     youtube_sources = cycle(YOUTUBE_SOURCES)
+    aligned_now = now.replace(second=0, microsecond=0)
 
     for topic_index, topic in enumerate(TOPICS):
         keyword = topic["keyword"]
-        for item_index, title in enumerate(topic["titles"]):
-            event_time = now - timedelta(minutes=18 * topic_index + 9 * item_index + 12)
-            source, category = next(news_sources)
-            content_events.append(
-                {
-                    "content_id": f"demo:news:{topic_index}:{item_index}",
-                    "content_type": "article",
-                    "platform": "news",
-                    "source": source,
-                    "source_category": category,
-                    "title": title,
-                    "summary": topic["summary"],
-                    "source_url": f"https://demo.local/news/{topic_index}-{item_index}",
-                    "published_at": iso_z(event_time),
-                    "ingested_at": iso_z(event_time + timedelta(minutes=2)),
-                    "event_time": iso_z(event_time),
-                    "keywords": [keyword, "việt nam", "thời sự"],
-                    "keyword_text": f"{keyword} việt nam thời sự",
-                    "sentiment": topic["sentiment"],
-                    "sentiment_score": round((topic["score"] - 50) / 50, 2),
-                    "sentiment_model": "demo-curated",
-                }
-            )
-
-        for item_index in range(2):
-            event_time = now - timedelta(minutes=14 * topic_index + 11 * item_index + 8)
-            source, category = next(youtube_sources)
-            content_events.append(
-                {
-                    "content_id": f"demo:youtube-rss:{topic_index}:{item_index}",
-                    "content_type": "video",
-                    "platform": "youtube",
-                    "source": source,
-                    "source_category": category,
-                    "title": f"{topic['titles'][item_index]} | bản tin nhanh",
-                    "summary": topic["summary"],
-                    "source_url": f"https://www.youtube.com/watch?v=demo{topic_index}{item_index}",
-                    "published_at": iso_z(event_time),
-                    "ingested_at": iso_z(event_time + timedelta(minutes=1)),
-                    "event_time": iso_z(event_time),
-                    "channel_id": f"demo-channel-{source}",
-                    "channel_title": source.replace("_", " ").title(),
-                    "keywords": [keyword, "youtube", "bản tin"],
-                    "keyword_text": f"{keyword} youtube bản tin",
-                    "sentiment": topic["sentiment"],
-                    "sentiment_score": round((topic["score"] - 50) / 50, 2),
-                    "sentiment_model": "demo-curated",
-                }
-            )
-
-        for window_index in range(8):
-            window_end = now.replace(second=0, microsecond=0) - timedelta(minutes=15 * window_index)
+        for window_index in range(DEMO_WINDOW_COUNT):
+            window_end = aligned_now - timedelta(minutes=DEMO_WINDOW_STEP_MINUTES * window_index)
             minute = (window_end.minute // 15) * 15
             window_end = window_end.replace(minute=minute)
             window_start = window_end - timedelta(hours=1)
-            content_count = max(2, int(topic["score"] / 12) - window_index + (topic_index % 2))
+            decay = max(0.18, 1 - (window_index / (DEMO_WINDOW_COUNT - 1)) ** 1.35)
+            spike_boost = 1.35 if window_index < 3 else 1.0
+            baseline = 1 + (topic_index % 3)
+            content_count = max(
+                1,
+                int(round(((topic["score"] / 18) * decay + baseline) * spike_boost)),
+            )
             trend_score = round(content_count * (1 + topic["score"] / 100), 2)
             metric = {
                 "keyword": keyword,
@@ -209,12 +169,64 @@ def build_demo_documents(now: datetime) -> tuple[list[dict], list[dict], list[di
                 "sentiment": topic["sentiment"],
             }
             trend_metrics.append(metric)
-            if window_index < 3 and content_count >= 4:
+            if window_index < 6 and content_count >= 5:
                 trend_alerts.append(
                     {
                         **metric,
                         "alert_type": "trend_spike",
                         "message": message_for_topic(keyword, content_count, topic["titles"]),
+                    }
+                )
+
+            if window_index % 6 == 0:
+                title_index = (window_index // 6) % len(topic["titles"])
+                event_time = window_end - timedelta(minutes=7 + topic_index)
+                source, category = next(news_sources)
+                content_events.append(
+                    {
+                        "content_id": f"demo:news:{topic_index}:{window_index}",
+                        "content_type": "article",
+                        "platform": "news",
+                        "source": source,
+                        "source_category": category,
+                        "title": topic["titles"][title_index],
+                        "summary": topic["summary"],
+                        "source_url": f"https://demo.local/news/{topic_index}-{window_index}",
+                        "published_at": iso_z(event_time),
+                        "ingested_at": iso_z(event_time + timedelta(minutes=2)),
+                        "event_time": iso_z(event_time),
+                        "keywords": [keyword, "việt nam", "thời sự"],
+                        "keyword_text": f"{keyword} việt nam thời sự",
+                        "sentiment": topic["sentiment"],
+                        "sentiment_score": round((topic["score"] - 50) / 50, 2),
+                        "sentiment_model": "demo-curated",
+                    }
+                )
+
+            if window_index % 8 == 1:
+                title_index = (window_index // 8) % len(topic["titles"])
+                event_time = window_end - timedelta(minutes=11 + topic_index)
+                source, category = next(youtube_sources)
+                content_events.append(
+                    {
+                        "content_id": f"demo:youtube-rss:{topic_index}:{window_index}",
+                        "content_type": "video",
+                        "platform": "youtube",
+                        "source": source,
+                        "source_category": category,
+                        "title": f"{topic['titles'][title_index]} | bản tin nhanh",
+                        "summary": topic["summary"],
+                        "source_url": f"https://www.youtube.com/watch?v=demo{topic_index}{window_index}",
+                        "published_at": iso_z(event_time),
+                        "ingested_at": iso_z(event_time + timedelta(minutes=1)),
+                        "event_time": iso_z(event_time),
+                        "channel_id": f"demo-channel-{source}",
+                        "channel_title": source.replace("_", " ").title(),
+                        "keywords": [keyword, "youtube", "bản tin"],
+                        "keyword_text": f"{keyword} youtube bản tin",
+                        "sentiment": topic["sentiment"],
+                        "sentiment_score": round((topic["score"] - 50) / 50, 2),
+                        "sentiment_model": "demo-curated",
                     }
                 )
 
