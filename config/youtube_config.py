@@ -15,6 +15,13 @@ def _csv_env_optional(name: str) -> list[str]:
     return [item.strip() for item in raw_value.split(",") if item.strip()]
 
 
+def _csv_env_override(name: str) -> list[str] | None:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return None
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
 def _merge_unique_csv_groups(*groups: list[str]) -> list[str]:
     seen: set[str] = set()
     merged: list[str] = []
@@ -67,16 +74,20 @@ YOUTUBE_SEARCH_QUERIES_MUSIC = _csv_env(
     "YOUTUBE_SEARCH_QUERIES_MUSIC",
     "mv mới,ca khúc mới phát hành,vpop mới,rap việt mới,live performance mới,nhạc viral tiktok",
 )
-YOUTUBE_SEARCH_QUERIES = _merge_unique_csv_groups(
-    _csv_env_optional("YOUTUBE_SEARCH_QUERIES"),
-    YOUTUBE_SEARCH_QUERIES_NEWS,
-    YOUTUBE_SEARCH_QUERIES_SPORTS,
-    YOUTUBE_SEARCH_QUERIES_ENTERTAINMENT,
-    YOUTUBE_SEARCH_QUERIES_GAMING,
-    YOUTUBE_SEARCH_QUERIES_REACTION,
-    YOUTUBE_SEARCH_QUERIES_HUMOR,
-    YOUTUBE_SEARCH_QUERIES_TECH,
-    YOUTUBE_SEARCH_QUERIES_MUSIC,
+_CUSTOM_SEARCH_QUERIES = _csv_env_override("YOUTUBE_SEARCH_QUERIES")
+YOUTUBE_SEARCH_QUERIES = (
+    _CUSTOM_SEARCH_QUERIES
+    if _CUSTOM_SEARCH_QUERIES is not None
+    else _merge_unique_csv_groups(
+        YOUTUBE_SEARCH_QUERIES_NEWS,
+        YOUTUBE_SEARCH_QUERIES_SPORTS,
+        YOUTUBE_SEARCH_QUERIES_ENTERTAINMENT,
+        YOUTUBE_SEARCH_QUERIES_GAMING,
+        YOUTUBE_SEARCH_QUERIES_REACTION,
+        YOUTUBE_SEARCH_QUERIES_HUMOR,
+        YOUTUBE_SEARCH_QUERIES_TECH,
+        YOUTUBE_SEARCH_QUERIES_MUSIC,
+    )
 )
 YOUTUBE_RELEVANCE_LANGUAGE = os.getenv("YOUTUBE_RELEVANCE_LANGUAGE", "vi")
 YOUTUBE_STRICT_VIETNAMESE_ONLY = (

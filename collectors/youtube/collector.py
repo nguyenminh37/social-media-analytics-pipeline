@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 import time
 import logging
 import re
@@ -51,6 +52,54 @@ logging.basicConfig(
     ]
 )
 log = logging.getLogger(__name__)
+
+
+def _redact_sensitive_text(value: object) -> str:
+    text = str(value)
+    text = re.sub(r"(?i)(key=)[^&\s\"']+", r"\1<redacted>", text)
+    text = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "<redacted>", text)
+    return text
+
+
+def _http_error_content(exc: HttpError) -> str:
+    content = getattr(exc, "content", b"")
+    if isinstance(content, bytes):
+        return content.decode("utf-8", errors="replace")
+    return str(content)
+
+
+def _summarize_http_error(exc: HttpError) -> str:
+    response = getattr(exc, "resp", None)
+    parts: list[str] = []
+    status = getattr(response, "status", None)
+    reason = getattr(response, "reason", None)
+    if status:
+        parts.append(f"status={status}")
+    if reason:
+        parts.append(f"reason={reason}")
+
+    content = _http_error_content(exc)
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError:
+        if content:
+            parts.append(f"message={_redact_sensitive_text(content)}")
+    else:
+        error = payload.get("error", {})
+        message = error.get("message")
+        if message:
+            parts.append(f"message={_redact_sensitive_text(message)}")
+        api_reasons = sorted(
+            {
+                str(detail.get("reason"))
+                for detail in error.get("errors", [])
+                if isinstance(detail, dict) and detail.get("reason")
+            }
+        )
+        if api_reasons:
+            parts.append(f"api_reason={','.join(api_reasons)}")
+
+    return "; ".join(parts) or _redact_sensitive_text(exc)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -178,7 +227,7 @@ def fetch_video_details(youtube, video_ids: list[str]) -> list[dict]:
                 normalize_video_item(item) for item in response.get("items", [])
             )
         except HttpError as exc:
-            log.error("Error fetching video details: %s", exc)
+            log.error("Error fetching video details: %s", _summarize_http_error(exc))
     return prioritize_preferred_videos(dedupe_entities(videos, "video_id"))
 
 
@@ -211,7 +260,11 @@ def fetch_multi_source_trending_videos(
                     normalize_video_item(item) for item in response.get("items", [])
                 )
             except HttpError as exc:
-                log.error("Error fetching trending videos for %s: %s", label, exc)
+                log.error(
+                    "Error fetching trending videos for %s: %s",
+                    label,
+                    _summarize_http_error(exc),
+                )
 
     deduped_videos = prioritize_preferred_videos(dedupe_entities(videos, "video_id"))
     log.info("Fetched %s unique trending videos.", len(deduped_videos))
@@ -252,7 +305,11 @@ def fetch_recent_search_videos(
                 if video_id:
                     video_ids.append(video_id)
         except HttpError as exc:
-            log.error("Error searching recent videos for query '%s': %s", query, exc)
+            log.error(
+                "Error searching recent videos for query '%s': %s",
+                query,
+                _summarize_http_error(exc),
+            )
 
     return fetch_video_details(youtube, list(dict.fromkeys(video_ids)))
 
@@ -339,11 +396,15 @@ def _fetch_comments_impl(youtube, video_id, max_results=MAX_COMMENTS_PER_VIDEO):
             if not next_page_token:
                 break
 
-    except HttpError as e:
-        if "commentsDisabled" in str(e):
+    except HttpError as exc:
+        if "commentsDisabled" in _http_error_content(exc):
             log.warning(f"Comments disabled for video {video_id}")
         else:
-            log.error(f"Error fetching comments for {video_id}: {e}")
+            log.error(
+                "Error fetching comments for %s: %s",
+                video_id,
+                _summarize_http_error(exc),
+            )
 
     return comments
 
@@ -386,8 +447,8 @@ def fetch_channel_info(youtube, channel_ids):
 
             time.sleep(0.5)
 
-        except HttpError as e:
-            log.error(f"Error fetching channel info: {e}")
+        except HttpError as exc:
+            log.error("Error fetching channel info: %s", _summarize_http_error(exc))
 
     channels = dedupe_entities(channels, "channel_id")
     log.info(f"Fetched info for {len(channels)} channels.")
