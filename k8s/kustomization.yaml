@@ -13,6 +13,8 @@ resources:
   - elasticsearch.yaml
   - kibana.yaml
   - spark-deployment.yaml
+  - spark-youtube-deployment.yaml
+  - youtube-producer-deployment.yaml
   - news-rss-deployment.yaml
   - youtube-rss-deployment.yaml
   - raw-archiver-deployment.yaml

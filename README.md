@@ -1,16 +1,21 @@
 # Social Media Analytics Pipeline
 
-Project này hiện chỉ giữ **YouTube pipeline** theo kiến trúc Kappa:
+Project này hiện có 2 luồng chính:
 
-`YouTube Data API -> Kafka -> Spark Structured Streaming -> MinIO / MongoDB / Elasticsearch -> Serving API / Dashboard`
+- `YouTube Data API -> Kafka -> Spark Structured Streaming -> MinIO / MongoDB / Elasticsearch -> Serving API / Dashboard`
+- `Public RSS / YouTube RSS -> Kafka -> Spark Structured Streaming -> MongoDB / Elasticsearch -> Public dashboard`
 
 ## Thành phần chính
 
 - `collectors/youtube/collector.py`: lấy dữ liệu video, comment, channel từ YouTube Data API.
 - `collectors/youtube/producer.py`: publish raw entities vào các Kafka topics YouTube.
+- `collectors/public_content/rss.py`: lấy bài viết từ RSS tiếng Việt.
+- `collectors/public_content/youtube_rss.py`: lấy video từ danh sách kênh YouTube RSS curated.
 - `consumers/raw_archiver.py`: ghi `raw_youtube_*` từ Kafka xuống MinIO theo partition thời gian.
 - `spark_jobs/youtube/stream_processor.py`: chuẩn hóa raw YouTube thành silver/gold datasets, aggregate metrics và ghi sink.
+- `spark_jobs/public_content/stream_processor.py`: chuẩn hóa public content events và aggregate trend metrics / alerts.
 - `serving_api/server.py`: HTTP API read-only cho top videos, sentiment metrics, trending keywords, freshness.
+- `serving_api/app.py`: HTTP API cho public trend dashboard.
 - `batch_tools/create_topics.py`: tạo Kafka topics cho YouTube pipeline.
 
 ## Khởi chạy hạ tầng
@@ -20,6 +25,32 @@ docker compose up -d
 ```
 
 Hệ thống sẽ chạy Kafka, ZooKeeper, MinIO, MongoDB, Elasticsearch, Kibana và Grafana.
+
+## Deploy Kubernetes local bằng Minikube
+
+Kubernetes manifest trong `k8s/` deploy cả public RSS trend pipeline và YouTube pipeline. Tránh apply lẻ từng file vì sẽ dễ tạo deployment trùng checkpoint.
+
+```bash
+export IMAGE_TAG=stable-demo
+./scripts/k8s-build-images.sh
+./scripts/k8s-apply.sh
+```
+
+`scripts/k8s-apply.sh` tự tạo namespace, secret `youtube-api-key` từ biến môi trường hoặc `.env`, xóa/re-run các Job bootstrap, apply kustomize và restart đúng các deployment app. Cần có `YOUTUBE_API_KEY` trước khi chạy script.
+
+```bash
+kubectl get pods -n social-media-analytics
+kubectl logs -n social-media-analytics deploy/social-media-spark-youtube --tail=100
+kubectl logs -n social-media-analytics deploy/social-media-spark --tail=100
+```
+
+Nếu disk VPS/Minikube bắt đầu đầy sau nhiều lần build/load image:
+
+```bash
+./scripts/k8s-clean-images.sh
+df -h /
+minikube ssh -- df -h /
+```
 
 ## Cài dependencies
 

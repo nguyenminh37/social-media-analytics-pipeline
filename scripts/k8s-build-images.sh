@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TAG=${IMAGE_TAG:-local}
+TAG=${IMAGE_TAG:-stable-demo}
 IMAGE_ARCHIVE_DIR=$(mktemp -d)
 
 cd "$(dirname "$0")/.."

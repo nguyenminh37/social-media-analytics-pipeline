@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: social-media-youtube-producer
+  labels:
+    app: social-media-youtube-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: social-media-youtube-producer
+  template:
+    metadata:
+      labels:
+        app: social-media-youtube-producer
+    spec:
+      containers:
+        - name: youtube-producer
+          image: social-media-collector:stable-demo
+          imagePullPolicy: Never
+          command: ["python", "-m", "collectors.youtube.producer"]
+          envFrom:
+            - configMapRef:
+                name: pipeline-runtime-config
+          env:
+            - name: YOUTUBE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: youtube-api-key
+                  key: YOUTUBE_API_KEY

@@ -48,6 +48,8 @@ spec:
               value: "false"
             - name: ES_JAVA_OPTS
               value: -Xms512m -Xmx512m
+            - name: cluster.routing.allocation.disk.threshold_enabled
+              value: "false"
           volumeMounts:
             - name: data
               mountPath: /usr/share/elasticsearch/data

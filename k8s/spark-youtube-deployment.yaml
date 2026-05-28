@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: social-media-spark
+  name: social-media-spark-youtube
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: social-media-spark
+      app: social-media-spark-youtube
   template:
     metadata:
       labels:
-        app: social-media-spark
+        app: social-media-spark-youtube
     spec:
       containers:
         - name: spark
@@ -28,8 +28,10 @@ spec:
               value: "false"
             - name: SPARK_RESOLVE_PACKAGES
               value: "false"
+            - name: YOUTUBE_CHECKPOINT_BASE
+              value: s3a://checkpoints/youtube_stream_processor
           command:
             - /bin/bash
             - -lc
             - |
-              spark-submit /opt/social-media-analytics/spark_jobs/public_content/stream_processor.py
+              spark-submit /opt/social-media-analytics/spark_jobs/youtube/stream_processor.py

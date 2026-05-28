@@ -3,6 +3,8 @@ kind: Job
 metadata:
   name: elasticsearch-kibana-smoke-check
 spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 900
   template:
     spec:
       restartPolicy: OnFailure
@@ -14,6 +16,28 @@ spec:
             - -c
             - |
               set -eu
-              curl -fsS http://social-media-elasticsearch:9200 >/tmp/es.json
-              curl -fsS http://social-media-kibana:5601/api/status >/tmp/kibana.json
+              for attempt in $(seq 1 120); do
+                if curl -fsS http://social-media-elasticsearch:9200 >/tmp/es.json; then
+                  echo "Elasticsearch is reachable."
+                  break
+                fi
+                if [ "$attempt" = "120" ]; then
+                  echo "Timed out waiting for Elasticsearch." >&2
+                  exit 1
+                fi
+                sleep 5
+              done
+              for attempt in $(seq 1 120); do
+                if curl -fsS http://social-media-kibana:5601/api/status >/tmp/kibana.json \
+                  && grep -Eq '"level"[[:space:]]*:[[:space:]]*"available"' /tmp/kibana.json; then
+                  echo "Kibana is available."
+                  break
+                fi
+                if [ "$attempt" = "120" ]; then
+                  echo "Timed out waiting for Kibana." >&2
+                  cat /tmp/kibana.json 2>/dev/null || true
+                  exit 1
+                fi
+                sleep 5
+              done
               echo "Elasticsearch and Kibana are reachable."
