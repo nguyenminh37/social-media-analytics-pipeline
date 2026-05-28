@@ -67,6 +67,9 @@ ENABLE_FULL_TREND_METRICS_SINK = (
     os.getenv("ENABLE_FULL_TREND_METRICS_SINK", "true").lower() == "true"
 )
 STRICT_SINKS = os.getenv("STRICT_SINKS", "false").lower() == "true"
+PUBLIC_CONTENT_EVENT_WATERMARK_DELAY = os.getenv(
+    "PUBLIC_CONTENT_EVENT_WATERMARK_DELAY", "7 days"
+)
 TREND_ALERT_MIN_CONTENT_COUNT = int(os.getenv("TREND_ALERT_MIN_CONTENT_COUNT", "4"))
 CHECKPOINT_BASE = os.getenv(
     "PUBLIC_CONTENT_CHECKPOINT_BASE",
@@ -166,7 +169,7 @@ def build_normalized_content_df(news_df: DataFrame, youtube_df: DataFrame) -> Da
         .withColumn("sentiment", lit(None).cast("string"))
         .withColumn("sentiment_model", lit(None).cast("string"))
         .filter(col("content_id").isNotNull())
-        .withWatermark("event_time", "2 hours")
+        .withWatermark("event_time", PUBLIC_CONTENT_EVENT_WATERMARK_DELAY)
         .dropDuplicates(["content_id"])
     )
 

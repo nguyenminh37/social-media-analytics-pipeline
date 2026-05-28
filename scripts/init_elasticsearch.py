@@ -13,6 +13,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from elasticsearch import Elasticsearch
 from config.storage_config import (
+    PUBLIC_CONTENT_EVENTS_INDEX,
+    PUBLIC_TREND_ALERTS_INDEX,
+    PUBLIC_TREND_METRICS_INDEX,
     YOUTUBE_CHANNEL_SNAPSHOTS_INDEX,
     YOUTUBE_CONTENT_EVENTS_INDEX,
 )
@@ -44,19 +47,43 @@ def init_elasticsearch(es_client: Elasticsearch, index_name: str, mapping_path: 
 
 def main():
     es = Elasticsearch([ELASTICSEARCH_HOST])
-    init_elasticsearch(
-        es,
-        YOUTUBE_CONTENT_EVENTS_INDEX,
-        PROJECT_ROOT / "schemas" / "youtube" / "elasticsearch_content_events_mapping.json",
-    )
-    init_elasticsearch(
-        es,
-        YOUTUBE_CHANNEL_SNAPSHOTS_INDEX,
-        PROJECT_ROOT
-        / "schemas"
-        / "youtube"
-        / "elasticsearch_channel_snapshots_mapping.json",
-    )
+    index_mappings = [
+        (
+            YOUTUBE_CONTENT_EVENTS_INDEX,
+            PROJECT_ROOT / "schemas" / "youtube" / "elasticsearch_content_events_mapping.json",
+        ),
+        (
+            YOUTUBE_CHANNEL_SNAPSHOTS_INDEX,
+            PROJECT_ROOT
+            / "schemas"
+            / "youtube"
+            / "elasticsearch_channel_snapshots_mapping.json",
+        ),
+        (
+            PUBLIC_CONTENT_EVENTS_INDEX,
+            PROJECT_ROOT
+            / "schemas"
+            / "public_content"
+            / "elasticsearch_content_events_mapping.json",
+        ),
+        (
+            PUBLIC_TREND_METRICS_INDEX,
+            PROJECT_ROOT
+            / "schemas"
+            / "public_content"
+            / "elasticsearch_trend_metrics_mapping.json",
+        ),
+        (
+            PUBLIC_TREND_ALERTS_INDEX,
+            PROJECT_ROOT
+            / "schemas"
+            / "public_content"
+            / "elasticsearch_trend_alerts_mapping.json",
+        ),
+    ]
+
+    for index_name, mapping_path in index_mappings:
+        init_elasticsearch(es, index_name, mapping_path)
 
 if __name__ == "__main__":
     main()

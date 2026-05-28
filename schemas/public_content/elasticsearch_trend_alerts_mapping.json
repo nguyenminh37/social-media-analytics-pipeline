@@ -1,0 +1,28 @@
+{
+  "mappings": {
+    "properties": {
+      "keyword": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "content_count": { "type": "long" },
+      "trend_score": { "type": "double" },
+      "window_start": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "window_end": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "alert_type": { "type": "keyword" },
+      "message": { "type": "text" },
+      "representative_titles": { "type": "text" }
+    }
+  }
+}

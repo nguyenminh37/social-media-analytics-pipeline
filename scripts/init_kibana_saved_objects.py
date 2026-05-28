@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed Kibana data views, searches, Vega charts, and a demo dashboard."""
+"""Seed Kibana data views, searches, Vega charts, and the public dashboard."""
 
 from __future__ import annotations
 
@@ -227,7 +227,7 @@ def content_volume_spec() -> dict[str, Any]:
                         "by_time": {
                             "date_histogram": {
                                 "field": "event_time",
-                                "fixed_interval": "30m",
+                                "fixed_interval": "1h",
                                 "min_doc_count": 0,
                             }
                         }
@@ -304,7 +304,7 @@ def trend_strength_spec() -> dict[str, Any]:
                         "by_time": {
                             "date_histogram": {
                                 "field": "window_end",
-                                "fixed_interval": "30m",
+                                "fixed_interval": "1h",
                                 "min_doc_count": 0,
                             },
                             "aggs": {
@@ -450,7 +450,6 @@ def seed_searches(kibana_url: str) -> None:
             "keyword",
             "content_count",
             "trend_score",
-            "representative_titles",
             "message",
         ],
         "window_end",
@@ -519,7 +518,7 @@ def seed_dashboard(kibana_url: str) -> None:
         {
             "title": "Vietnam Public Trend Intelligence",
             "description": (
-                "Demo dashboard for RSS and YouTube RSS trend analytics backed by Elasticsearch."
+                "Dashboard for RSS and YouTube RSS trend analytics backed by Elasticsearch."
             ),
             "panelsJSON": json.dumps(panels, separators=(",", ":")),
             "optionsJSON": json.dumps(
@@ -534,8 +533,8 @@ def seed_dashboard(kibana_url: str) -> None:
             ),
             "version": 1,
             "timeRestore": True,
-            "timeFrom": "now-24h",
-            "timeTo": "now+12h",
+            "timeFrom": "now-7d",
+            "timeTo": "now",
             "refreshInterval": {
                 "pause": False,
                 "value": 60000,
@@ -558,7 +557,7 @@ def seed_all(kibana_url: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Seed Kibana saved objects for the public trend analytics demo."
+        description="Seed Kibana saved objects for the public trend analytics dashboard."
     )
     parser.add_argument(
         "--kibana-url",
@@ -585,7 +584,7 @@ def main() -> int:
     seed_all(kibana_url)
     display_url = (args.display_url or kibana_url).rstrip("/")
     dashboard_url = f"{display_url}/app/dashboards#/view/{DASHBOARD_ID}"
-    print(f"Seeded Kibana demo dashboard: {dashboard_url}")
+    print(f"Seeded Kibana dashboard: {dashboard_url}")
     return 0
 
 

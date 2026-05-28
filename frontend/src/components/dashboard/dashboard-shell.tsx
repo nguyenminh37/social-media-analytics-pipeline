@@ -138,7 +138,7 @@ export function DashboardShell() {
   const defaultDateRange = useMemo(() => getDefaultDateRange(), []);
   const [filter, setFilter] = useState<DashboardFilter>({
     filterMode: "hours",
-    windowHours: 24,
+    windowHours: 168,
     dateFrom: defaultDateRange.dateFrom,
     dateTo: defaultDateRange.dateTo,
   });

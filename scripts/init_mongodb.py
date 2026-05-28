@@ -19,6 +19,9 @@ from config.mongo_config import (
     MONGO_URI,
 )
 from config.storage_config import (
+    PUBLIC_CONTENT_EVENTS_COLLECTION,
+    PUBLIC_TREND_ALERTS_COLLECTION,
+    PUBLIC_TREND_METRICS_COLLECTION,
     YOUTUBE_CHANNEL_SNAPSHOTS_COLLECTION,
     YOUTUBE_CONTENT_EVENTS_COLLECTION,
     YOUTUBE_SENTIMENT_COLLECTION,
@@ -148,6 +151,65 @@ def init_mongodb(client: MongoClient, db_name: str):
         expireAfterSeconds=metrics_ttl_seconds,
     )
     logging.info(f"Created indexes for {YOUTUBE_TRENDING_COLLECTION}")
+
+    # 4. Public Content Indexes
+    public_content = db[PUBLIC_CONTENT_EVENTS_COLLECTION]
+    create_index_safe(
+        public_content,
+        [("content_id", pymongo.ASCENDING)],
+        unique=True,
+    )
+    public_content.create_index([("event_time", pymongo.DESCENDING)])
+    public_content.create_index([("published_at", pymongo.DESCENDING)])
+    public_content.create_index([("platform", pymongo.ASCENDING)])
+    public_content.create_index([("source", pymongo.ASCENDING)])
+    public_content.create_index(
+        [("sentiment_model", pymongo.ASCENDING), ("event_time", pymongo.DESCENDING)]
+    )
+    public_content.create_index(
+        [("ingested_at", pymongo.ASCENDING)],
+        expireAfterSeconds=posts_ttl_seconds,
+    )
+    logging.info(f"Created indexes for {PUBLIC_CONTENT_EVENTS_COLLECTION}")
+
+    # 5. Public Trend Metric Indexes
+    public_trends = db[PUBLIC_TREND_METRICS_COLLECTION]
+    public_trends.create_index([("window_end", pymongo.DESCENDING), ("keyword", pymongo.ASCENDING)])
+    create_index_safe(
+        public_trends,
+        [
+            ("keyword", pymongo.ASCENDING),
+            ("window_start", pymongo.ASCENDING),
+            ("window_end", pymongo.ASCENDING),
+        ],
+        unique=True,
+    )
+    public_trends.create_index(
+        [("window_end", pymongo.ASCENDING)],
+        expireAfterSeconds=metrics_ttl_seconds,
+    )
+    logging.info(f"Created indexes for {PUBLIC_TREND_METRICS_COLLECTION}")
+
+    # 6. Public Trend Alert Indexes
+    public_alerts = db[PUBLIC_TREND_ALERTS_COLLECTION]
+    public_alerts.create_index(
+        [("window_end", pymongo.DESCENDING), ("trend_score", pymongo.DESCENDING)]
+    )
+    create_index_safe(
+        public_alerts,
+        [
+            ("keyword", pymongo.ASCENDING),
+            ("window_start", pymongo.ASCENDING),
+            ("window_end", pymongo.ASCENDING),
+            ("alert_type", pymongo.ASCENDING),
+        ],
+        unique=True,
+    )
+    public_alerts.create_index(
+        [("window_end", pymongo.ASCENDING)],
+        expireAfterSeconds=metrics_ttl_seconds,
+    )
+    logging.info(f"Created indexes for {PUBLIC_TREND_ALERTS_COLLECTION}")
 
 def main():
     client = MongoClient(MONGO_URI)
